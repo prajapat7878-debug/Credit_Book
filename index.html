@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#003366">
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
-      .then(() => console.log('Service Worker Registered'));
-  }
-</script>
- src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <title>LIC Policy Manager</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- PapaParse for reading CSV files safely -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Flatpickr Datepicker Library -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     
     <script>
         tailwind.config = {
@@ -103,11 +102,11 @@
                 <div id="customDateContainer" class="hidden mt-3 p-3 bg-white rounded-xl shadow-sm border border-gray-200 flex gap-2 items-end">
                     <div class="flex-1">
                         <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">From Date</label>
-                        <input type="date" id="customFromDate" class="w-full text-xs p-2 font-bold text-gray-700 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:border-licBlue">
+                        <input type="text" id="customFromDate" class="w-full text-xs p-2 font-bold text-gray-700 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:border-licBlue bg-white">
                     </div>
                     <div class="flex-1">
                         <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">To Date</label>
-                        <input type="date" id="customToDate" class="w-full text-xs p-2 font-bold text-gray-700 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:border-licBlue">
+                        <input type="text" id="customToDate" class="w-full text-xs p-2 font-bold text-gray-700 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:border-licBlue bg-white">
                     </div>
                     <button onclick="applyFilters()" class="bg-licBlue text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-blue-800 transition-colors">
                         Go
@@ -204,7 +203,7 @@
                     <div class="grid grid-cols-2 gap-3">
                         <div class="flex flex-col">
                             <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">DOB</label>
-                            <input type="text" id="edit_dob" placeholder="DD/MM/YYYY" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm">
+                            <input type="text" id="edit_dob" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm text-gray-700 bg-white">
                         </div>
                         <div class="flex flex-col">
                             <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Mobile</label>
@@ -244,7 +243,7 @@
                         </div>
                         <div class="flex flex-col">
                             <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Commencement Date</label>
-                            <input type="text" id="edit_doc" placeholder="DD/MM/YYYY" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm">
+                            <input type="text" id="edit_doc" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm text-gray-700 bg-white">
                         </div>
                     </div>
 
@@ -280,7 +279,7 @@
                     
                     <div class="flex flex-col">
                         <label class="text-[11px] font-bold text-licBlue mb-1 uppercase">Next FUP Date</label>
-                        <input type="text" id="edit_fup" placeholder="DD/MM/YYYY" class="w-full px-3 py-2.5 bg-white font-bold border-2 border-licBlue rounded-xl focus:ring-2 focus:ring-licYellow outline-none text-licBlue text-sm">
+                        <input type="text" id="edit_fup" class="w-full px-3 py-2.5 font-bold border-2 border-licBlue rounded-xl focus:ring-2 focus:ring-licYellow outline-none text-licBlue text-sm bg-white">
                     </div>
 
                     <!-- Calculate Total Premium Section -->
@@ -321,29 +320,56 @@
         let currentTimelineFilter = 'ALL';
         let isAddingNew = false;
 
+        // --- Helper function to format DD/MM/YYYY to YYYY-MM-DD for date input fields ---
+        function formatToDateInput(dateStr) {
+            if (!dateStr || dateStr === '-' || dateStr === 'null') return '';
+            let parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+            return '';
+        }
+
+        // --- Helper function to format YYYY-MM-DD to DD/MM/YYYY for CSV/Display ---
+        function formatToDDMMYYYY(dateStr) {
+            if (!dateStr) return '';
+            let parts = dateStr.split('-');
+            if (parts.length === 3) {
+                return `${parts[2]}/${parts[1]}/${parts[0]}`;
+            }
+            return '';
+        }
+
         // --- Load Data from Browser Memory (Local Storage) on Startup ---
         window.onload = function() {
-            const savedLogo = localStorage.getItem('lic_app_logo');
-            if(savedLogo) {
-                document.getElementById('appLogo').src = savedLogo;
-            }
+            try {
+                const savedLogo = localStorage.getItem('lic_app_logo');
+                if(savedLogo) {
+                    document.getElementById('appLogo').src = savedLogo;
+                }
 
-            const savedData = localStorage.getItem('lic_policies_data');
-            if (savedData) {
-                allPolicies = JSON.parse(savedData);
-                document.getElementById('sortSelect').value = "SNo-asc";
-                setFupFilter('ALL'); 
-            } else {
-                renderList([]); // Shows empty state asking to upload
+                const savedData = localStorage.getItem('lic_policies_data');
+                if (savedData) {
+                    allPolicies = JSON.parse(savedData);
+                    document.getElementById('sortSelect').value = "SNo-asc";
+                    setFupFilter('ALL'); 
+                } else {
+                    renderList([]); 
+                }
+            } catch (e) {
+                console.error("Storage Error:", e);
+                renderList([]);
             }
         }
 
-        // --- Save Data Permanently to Browser ---
         function saveToLocalStorage() {
-            localStorage.setItem('lic_policies_data', JSON.stringify(allPolicies));
+            try {
+                localStorage.setItem('lic_policies_data', JSON.stringify(allPolicies));
+            } catch (e) {
+                alert("Failed to save data permanently. Browser storage might be full.");
+            }
         }
 
-        // --- User Logo Upload ---
         function updateLogo(event) {
             const file = event.target.files[0];
             if (file) {
@@ -351,21 +377,19 @@
                 reader.onload = function(e) {
                     const logoData = e.target.result;
                     document.getElementById('appLogo').src = logoData;
-                    localStorage.setItem('lic_app_logo', logoData); // Save logo permanently
+                    try { localStorage.setItem('lic_app_logo', logoData); } catch(err){} 
                 }
                 reader.readAsDataURL(file);
             }
         }
 
-        // --- File Upload via PapaParse (CSV) ---
         function handleFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
 
             const reader = new FileReader();
             reader.onload = function(e) {
-                const text = e.target.result;
-                processCSVData(text);
+                processCSVData(e.target.result);
             };
             reader.readAsText(file);
         }
@@ -387,64 +411,54 @@
                 header: true,
                 skipEmptyLines: true,
                 complete: function(results) {
-                    processParsedData(results.data);
+                    allPolicies = [];
+                    let serialCounter = 1;
+
+                    results.data.forEach(row => {
+                        const policyNo = row['Policy Number'] || row['Policy No'];
+                        const policyName = row['Policy Holder'] || row['Name'];
+                        
+                        if (policyNo && policyName) {
+                            let cleanedRow = { ...row };
+                            cleanedRow['Policy Number'] = String(policyNo).trim();
+                            cleanedRow['Policy Holder'] = String(policyName).trim();
+                            
+                            const existingSNo = parseInt(cleanedRow['SNo']);
+                            if (isNaN(existingSNo)) {
+                                cleanedRow['SNo'] = serialCounter;
+                            }
+                            
+                            allPolicies.push(cleanedRow);
+                            serialCounter++;
+                        }
+                    });
+
+                    saveToLocalStorage(); 
+                    document.getElementById('sortSelect').value = "SNo-asc";
+                    setFupFilter('ALL'); 
                 }
             });
         }
 
-        function processParsedData(jsonData) {
-            allPolicies = [];
-            let serialCounter = 1;
-
-            jsonData.forEach(row => {
-                const policyNo = row['Policy Number'] || row['Policy No'];
-                const policyName = row['Policy Holder'] || row['Name'];
-                
-                if (policyNo && policyName) {
-                    let cleanedRow = { ...row };
-                    cleanedRow['Policy Number'] = String(policyNo).trim();
-                    cleanedRow['Policy Holder'] = String(policyName).trim();
-                    
-                    const existingSNo = parseInt(cleanedRow['SNo']);
-                    if (isNaN(existingSNo)) {
-                        cleanedRow['SNo'] = serialCounter;
-                    }
-                    
-                    allPolicies.push(cleanedRow);
-                    serialCounter++;
-                }
-            });
-
-            saveToLocalStorage(); // Save new file to memory
-            document.getElementById('sortSelect').value = "SNo-asc";
-            setFupFilter('ALL'); 
-        }
-
-        // --- Export Data back to CSV ---
         function exportToCSV() {
             if(allPolicies.length === 0) {
                 alert("No data available to download!");
                 return;
             }
-            
             const csv = Papa.unparse(allPolicies);
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             const url = URL.createObjectURL(blob);
-            
             link.setAttribute("href", url);
             link.setAttribute("download", "updated_lic_policies.csv");
             link.style.visibility = 'hidden';
-            
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         }
 
-        // --- FUP Timeline Filter Logic ---
         function setFupFilter(filterType) {
             currentTimelineFilter = filterType;
-            
             const ids = ['ALL', 'CURRENT', 'NEXT', 'LAST_6', 'CUSTOM'];
             ids.forEach(id => {
                 const btn = document.getElementById('filter_' + id);
@@ -488,7 +502,6 @@
                 sixMonthsAgo.setMonth(now.getMonth() - 6);
                 sixMonthsAgo.setDate(1); 
                 sixMonthsAgo.setHours(0,0,0,0);
-                
                 let startOfCurrentMonth = new Date(currentYear, currentMonth, 1);
                 return fupDate >= sixMonthsAgo && fupDate < startOfCurrentMonth;
             }
@@ -507,7 +520,6 @@
             return true;
         }
 
-        // --- Search and Apply Filters ---
         function applyFilters() {
             const searchName = document.getElementById('searchName').value.toLowerCase();
             const searchNumber = document.getElementById('searchNumber').value.toLowerCase();
@@ -525,13 +537,10 @@
             handleSort();
         }
 
-        // --- Sorting Logic ---
         function getSortableDate(dateStr) {
             if (!dateStr || dateStr === '-' || dateStr === 'null') return '00000000';
             let parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
-            if (parts.length === 3) {
-                return parts[2] + parts[1].padStart(2, '0') + parts[0].padStart(2, '0');
-            }
+            if (parts.length === 3) return parts[2] + parts[1].padStart(2, '0') + parts[0].padStart(2, '0');
             return '00000000';
         }
 
@@ -601,7 +610,6 @@
                     <div class="absolute top-3 right-4 bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-200">
                         #${sNo}
                     </div>
-                    
                     <div class="flex items-start gap-3 mb-4">
                         <div class="h-12 w-12 rounded-full bg-blue-50 border border-blue-100 text-licBlue flex items-center justify-center font-bold text-xl flex-shrink-0">
                             ${initial}
@@ -613,7 +621,6 @@
                             </button>
                         </div>
                     </div>
-                    
                     <div class="grid grid-cols-2 gap-2 bg-gray-50 rounded-xl p-3 border border-gray-100">
                         <div>
                             <p class="text-gray-400 font-bold text-[10px] uppercase tracking-wide">Premium</p>
@@ -631,11 +638,9 @@
             });
         }
 
-        // --- Edit / Add Modal Functions ---
         function openAddModal() {
             isAddingNew = true;
             currentEditingPolicy = null;
-
             document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus-circle text-licYellow"></i> Add New Policy';
             
             document.getElementById('edit_name').value = '';
@@ -675,7 +680,6 @@
 
             isAddingNew = false;
             currentEditingPolicy = policy;
-
             document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-file-lines text-licYellow"></i> Policy Details';
 
             document.getElementById('edit_name').value = policy['Policy Holder'] || '';
@@ -684,26 +688,27 @@
             document.getElementById('edit_policyNo').classList.add('cursor-not-allowed', 'bg-gray-100');
             document.getElementById('edit_policyNo').classList.remove('bg-white');
 
-            document.getElementById('edit_dob').value = policy['DOB'] || '';
+            // Format dates from DD/MM/YYYY to YYYY-MM-DD for input
+            document.getElementById('edit_dob').value = formatToDateInput(policy['DOB']);
+            document.getElementById('edit_doc').value = formatToDateInput(policy['Commecement Date'] || policy['Commencement Date']);
+            document.getElementById('edit_fup').value = formatToDateInput(policy['FUP Date']);
+
             document.getElementById('edit_mobile').value = policy['Mobile'] || '';
             document.getElementById('edit_email').value = policy['Email'] || '';
             document.getElementById('edit_address').value = policy['Address'] || '';
             document.getElementById('edit_nominee').value = policy['Nominee'] || '';
             document.getElementById('edit_plan').value = policy['Plan'] || '';
-            document.getElementById('edit_doc').value = policy['Commecement Date'] || policy['Commencement Date'] || '';
             document.getElementById('edit_term').value = policy['Term'] || '';
             document.getElementById('edit_ppt').value = policy['PPT'] || '';
             document.getElementById('edit_mode').value = policy['Mode'] || '';
             document.getElementById('edit_sumAssured').value = policy['Sum Assured'] || '';
             document.getElementById('edit_premium').value = policy['Premium'] || '';
-            document.getElementById('edit_fup').value = policy['FUP Date'] || '';
 
             document.getElementById('totalPremiumContainer').classList.add('hidden');
             document.getElementById('saveMsg').classList.add('hidden');
 
             const modal = document.getElementById('policyModal');
             modal.classList.remove('hidden');
-            
             setTimeout(() => {
                 modal.classList.remove('opacity-0', 'pointer-events-none');
                 modal.classList.add('opacity-100');
@@ -712,10 +717,8 @@
 
         function closeModal() {
             const modal = document.getElementById('policyModal');
-            
             modal.classList.remove('opacity-100');
             modal.classList.add('opacity-0', 'pointer-events-none');
-            
             setTimeout(() => {
                 modal.classList.add('hidden');
                 currentEditingPolicy = null;
@@ -741,27 +744,31 @@
             
             p['Policy Holder'] = document.getElementById('edit_name').value.trim();
             p['Policy Number'] = document.getElementById('edit_policyNo').value.trim();
-            p['DOB'] = document.getElementById('edit_dob').value.trim();
+            
+            // Format dates back from YYYY-MM-DD to DD/MM/YYYY for storing
+            p['DOB'] = formatToDDMMYYYY(document.getElementById('edit_dob').value);
+            p['FUP Date'] = formatToDDMMYYYY(document.getElementById('edit_fup').value);
+            
+            let docVal = formatToDDMMYYYY(document.getElementById('edit_doc').value);
+            if('Commecement Date' in p || isAddingNew) {
+                p['Commecement Date'] = docVal;
+            } else {
+                p['Commencement Date'] = docVal;
+            }
+
             p['Mobile'] = document.getElementById('edit_mobile').value.trim();
             p['Email'] = document.getElementById('edit_email').value.trim();
             p['Address'] = document.getElementById('edit_address').value.trim();
             p['Nominee'] = document.getElementById('edit_nominee').value.trim();
             p['Plan'] = document.getElementById('edit_plan').value.trim();
             
-            if('Commecement Date' in p || isAddingNew) {
-                p['Commecement Date'] = document.getElementById('edit_doc').value.trim();
-            } else {
-                p['Commencement Date'] = document.getElementById('edit_doc').value.trim();
-            }
-            
             p['Term'] = document.getElementById('edit_term').value.trim();
             p['PPT'] = document.getElementById('edit_ppt').value.trim();
             p['Mode'] = document.getElementById('edit_mode').value.trim();
             p['Sum Assured'] = document.getElementById('edit_sumAssured').value.trim();
             p['Premium'] = document.getElementById('edit_premium').value.trim();
-            p['FUP Date'] = document.getElementById('edit_fup').value.trim();
             
-            saveToLocalStorage(); // UPDATE MEMORY
+            saveToLocalStorage(); 
             
             const saveMsg = document.getElementById('saveMsg');
             saveMsg.classList.remove('hidden');
@@ -770,34 +777,32 @@
             
             setTimeout(() => {
                 saveMsg.classList.add('hidden');
-                if (isAddingNew) {
-                    closeModal();
-                }
+                if (isAddingNew) closeModal();
             }, 1500);
         }
 
-        // --- Calculate Total Premium Paid ---
         function calculateTotalPremium() {
-            let docStr = document.getElementById('edit_doc').value.trim();
-            let fupStr = document.getElementById('edit_fup').value.trim();
+            // Get dates in YYYY-MM-DD format from inputs
+            let docStr = document.getElementById('edit_doc').value;
+            let fupStr = document.getElementById('edit_fup').value;
             let premiumStr = document.getElementById('edit_premium').value.trim();
             let mode = String(document.getElementById('edit_mode').value).toUpperCase().trim();
 
             if(!docStr || !fupStr || !premiumStr || !mode) {
-                alert("Ensure DOC, FUP Date, Premium, and Mode are correctly filled in DD/MM/YYYY format.");
+                alert("Ensure DOC, FUP Date, Premium, and Mode are filled.");
                 return;
             }
 
-            let docParts = docStr.includes('/') ? docStr.split('/') : docStr.split('-');
-            let fupParts = fupStr.includes('/') ? fupStr.split('/') : fupStr.split('-');
+            let docParts = docStr.split('-');
+            let fupParts = fupStr.split('-');
             
             if(docParts.length !== 3 || fupParts.length !== 3) {
-                alert("Dates must be exactly in DD/MM/YYYY format.");
+                alert("Please select valid dates.");
                 return;
             }
 
-            let doc = new Date(docParts[2], parseInt(docParts[1]) - 1, docParts[0]);
-            let fup = new Date(fupParts[2], parseInt(fupParts[1]) - 1, fupParts[0]);
+            let doc = new Date(docParts[0], parseInt(docParts[1]) - 1, docParts[2]);
+            let fup = new Date(fupParts[0], parseInt(fupParts[1]) - 1, fupParts[2]);
             let premium = parseFloat(premiumStr);
 
             let monthsDiff = (fup.getFullYear() - doc.getFullYear()) * 12 + (fup.getMonth() - doc.getMonth());
@@ -815,12 +820,11 @@
             document.getElementById('totalPremiumContainer').classList.remove('hidden');
         }
 
-        // --- WhatsApp Share ---
         function shareViaWhatsApp() {
             let name = document.getElementById('edit_name').value.trim();
             let pNo = document.getElementById('edit_policyNo').value.trim();
             let premium = document.getElementById('edit_premium').value.trim();
-            let fup = document.getElementById('edit_fup').value.trim();
+            let fup = formatToDDMMYYYY(document.getElementById('edit_fup').value);
             
             if (!pNo) return;
             
@@ -837,6 +841,19 @@
             const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
             window.open(whatsappUrl, '_blank');
         }
+
+        // Initialize Custom Calendar (Flatpickr)
+        document.addEventListener('DOMContentLoaded', function() {
+            const dateConfig = { 
+                dateFormat: "Y-m-d", 
+                allowInput: true 
+            };
+            flatpickr("#customFromDate", dateConfig);
+            flatpickr("#customToDate", dateConfig);
+            flatpickr("#edit_dob", dateConfig);
+            flatpickr("#edit_doc", dateConfig);
+            flatpickr("#edit_fup", dateConfig);
+        });
     </script>
 </body>
 </html>
