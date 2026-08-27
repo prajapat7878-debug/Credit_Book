@@ -1,859 +1,766 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="hi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LIC Policy Manager</title>
-    <!-- Tailwind CSS for styling -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Digital Khata Pro</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PapaParse for reading CSV files safely -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <!-- Font Awesome for Icons -->
+    <!-- FontAwesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Flatpickr Datepicker Library -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- html2pdf.js for PDF Generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
                     colors: {
-                        licBlue: '#003366',
-                        licYellow: '#FCCC0A',
+                        brand: '#0a4275', 
+                        diya: '#ef4444',  
+                        mila: '#22c55e',  
                     }
                 }
             }
         }
     </script>
     <style>
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f1f1; }
-        ::-webkit-scrollbar-thumb { background: #003366; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #002244; }
-        .modal-transition { transition: all 0.3s ease-in-out; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .screen-transition { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s; }
+        .modal-overlay { backdrop-filter: blur(3px); }
+        .avatar-img { object-fit: cover; }
+        
+        /* Fix for PDF Generation Container */
+        #pdf-template-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 800px;
+            background: white;
+            z-index: -9999; /* Push to back instead of off-screen left */
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        /* Pulse animation for editable items */
+        .editable-item {
+            cursor: pointer;
+            transition: transform 0.1s, opacity 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .editable-item:active {
+            transform: scale(0.97);
+            opacity: 0.8;
+        }
     </style>
 </head>
-<body class="bg-gray-100 font-sans text-gray-800 antialiased min-h-screen">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen text-gray-800">
 
-    <!-- Mobile-First Container -->
-    <div class="max-w-xl mx-auto bg-gray-50 min-h-screen shadow-2xl overflow-hidden relative pb-24">
-        
-        <!-- Header Section -->
-        <header class="bg-licBlue shadow-md sticky top-0 z-40">
-            <div class="px-4 py-4 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <label for="logoUpload" class="cursor-pointer relative group block h-12 w-12 rounded bg-white p-0.5 shadow-sm overflow-hidden flex-shrink-0">
-                        <img id="appLogo" src="https://upload.wikimedia.org/wikipedia/en/thumb/8/83/Life_Insurance_Corporation_of_India_logo.svg/1200px-Life_Insurance_Corporation_of_India_logo.svg.png" 
-                             alt="Logo" class="h-full w-full object-cover">
-                        <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <i class="fa-solid fa-camera text-white text-xs"></i>
-                        </div>
-                    </label>
-                    <input type="file" id="logoUpload" accept="image/*" class="hidden" onchange="updateLogo(event)">
-                    
-                    <div>
-                        <h1 class="text-xl font-bold text-licYellow tracking-wide">LIC Manager</h1>
-                        <p class="text-white text-[10px] opacity-80">Offline Policy Tracker</p>
-                    </div>
-                </div>
-                
-                <div class="flex items-center gap-2">
-                    <!-- Export Data Button -->
-                    <button onclick="exportToCSV()" class="bg-white text-licBlue h-10 w-10 flex items-center justify-center rounded-full shadow hover:bg-gray-200 transition-colors flex-shrink-0" title="Download Updated CSV">
-                        <i class="fa-solid fa-download text-lg"></i>
-                    </button>
-                    <!-- Import CSV Button -->
-                    <label for="csvUpload" class="cursor-pointer bg-licYellow text-licBlue h-10 w-10 flex items-center justify-center rounded-full shadow hover:bg-yellow-400 transition-colors flex-shrink-0" title="Upload New CSV">
-                        <i class="fa-solid fa-file-csv text-lg"></i>
-                    </label>
-                    <input type="file" id="csvUpload" accept=".csv" class="hidden" onchange="handleFileUpload(event)">
-                </div>
-            </div>
-        </header>
-
-        <!-- Main Content -->
-        <main class="px-4 py-5">
-            
-            <!-- Horizontal FUP Filter Chips -->
-            <div class="mb-5">
-                <p class="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wider pl-1"><i class="fa-regular fa-calendar-days mr-1"></i> FUP Timeline</p>
-                <div class="flex overflow-x-auto gap-2 pb-1 scrollbar-hide">
-                    <button onclick="setFupFilter('ALL')" id="filter_ALL" class="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap bg-licBlue text-white shadow-sm transition-colors border border-licBlue">
-                        All Policies
-                    </button>
-                    <button onclick="setFupFilter('CURRENT')" id="filter_CURRENT" class="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap bg-white text-gray-600 border border-gray-300 shadow-sm transition-colors">
-                        Current Month
-                    </button>
-                    <button onclick="setFupFilter('NEXT')" id="filter_NEXT" class="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap bg-white text-gray-600 border border-gray-300 shadow-sm transition-colors">
-                        Next Month
-                    </button>
-                    <button onclick="setFupFilter('LAST_6')" id="filter_LAST_6" class="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap bg-white text-gray-600 border border-gray-300 shadow-sm transition-colors">
-                        Last 6 Months
-                    </button>
-                    <button onclick="setFupFilter('CUSTOM')" id="filter_CUSTOM" class="px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap bg-white text-gray-600 border border-gray-300 shadow-sm transition-colors">
-                        Custom Range
-                    </button>
-                </div>
-                
-                <!-- Custom Date Picker -->
-                <div id="customDateContainer" class="hidden mt-3 p-3 bg-white rounded-xl shadow-sm border border-gray-200 flex gap-2 items-end">
-                    <div class="flex-1">
-                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">From Date</label>
-                        <input type="text" id="customFromDate" class="w-full text-xs p-2 font-bold text-gray-700 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:border-licBlue bg-white">
-                    </div>
-                    <div class="flex-1">
-                        <label class="text-[10px] font-bold text-gray-500 uppercase block mb-1">To Date</label>
-                        <input type="text" id="customToDate" class="w-full text-xs p-2 font-bold text-gray-700 bg-gray-50 border border-gray-300 rounded-lg outline-none focus:border-licBlue bg-white">
-                    </div>
-                    <button onclick="applyFilters()" class="bg-licBlue text-white px-3 py-2 rounded-lg text-sm font-bold shadow-sm hover:bg-blue-800 transition-colors">
-                        Go
-                    </button>
-                </div>
-            </div>
-
-            <!-- Search Controls -->
-            <div class="bg-white rounded-2xl shadow-sm p-4 mb-5 border border-gray-200">
-                <div class="flex flex-col gap-3">
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fa-regular fa-user text-gray-400"></i>
-                        </div>
-                        <input type="text" id="searchName" placeholder="Search Name..." 
-                               class="w-full pl-10 pr-4 py-3 bg-gray-50 font-bold rounded-xl border border-gray-200 focus:outline-none focus:border-licBlue focus:ring-1 focus:ring-licBlue transition-colors"
-                               onkeyup="applyFilters()">
-                    </div>
-                    <div class="relative">
-                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <i class="fa-solid fa-hashtag text-gray-400"></i>
-                        </div>
-                        <input type="text" id="searchNumber" placeholder="Search Policy No..." 
-                               class="w-full pl-10 pr-4 py-3 bg-gray-50 font-bold rounded-xl border border-gray-200 focus:outline-none focus:border-licBlue focus:ring-1 focus:ring-licBlue transition-colors"
-                               onkeyup="applyFilters()">
-                    </div>
-                </div>
-            </div>
-
-            <!-- Sorting & Results Count -->
-            <div class="flex items-center justify-between mb-4 px-1">
-                <p class="font-bold text-gray-600 text-sm" id="resultCount">0 Policies</p>
-                <div class="relative">
-                    <select id="sortSelect" onchange="handleSort()" class="appearance-none bg-white font-bold border border-gray-300 text-gray-700 text-xs rounded-lg focus:ring-licBlue focus:border-licBlue block px-3 py-2 pr-8 shadow-sm outline-none">
-                        <option value="SNo-asc">Sort: Default</option>
-                        <option value="Policy Holder-asc">Name (A-Z)</option>
-                        <option value="FUP Date-asc">FUP (Oldest First)</option>
-                        <option value="FUP Date-desc">FUP (Newest First)</option>
-                    </select>
-                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                        <i class="fa-solid fa-chevron-down text-[10px]"></i>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Vertical Card List (Android Layout) -->
-            <div id="policyListContainer" class="flex flex-col gap-4">
-                <!-- Populated by JS -->
-            </div>
-            
-            <!-- Empty State -->
-            <div id="noDataMessage" class="hidden text-center py-12 px-4 bg-white rounded-2xl border border-gray-200 shadow-sm mt-4">
-                <i class="fa-solid fa-file-invoice text-gray-300 text-6xl mb-4"></i>
-                <p class="text-gray-500 font-bold text-base" id="emptyTitle">Welcome to LIC Manager</p>
-                <p class="text-gray-400 text-sm mt-1" id="emptyDesc">Please upload your CSV file once. It will be saved permanently.</p>
-                <label for="csvUpload" class="inline-block mt-4 cursor-pointer bg-licBlue text-white font-bold py-2 px-6 rounded-lg shadow hover:bg-blue-800 transition-colors">
-                    Upload File Now
-                </label>
-            </div>
-        </main>
-
-        <!-- Floating Add New Policy Button -->
-        <button onclick="openAddModal()" class="fixed bottom-6 right-6 bg-licYellow text-licBlue h-14 w-14 rounded-full shadow-[0_4px_15px_rgba(0,0,0,0.3)] flex items-center justify-center text-2xl font-bold hover:scale-105 transition-transform z-30 border-2 border-white">
-            <i class="fa-solid fa-plus"></i>
-        </button>
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 left-1/2 transform -translate-x-1/2 px-5 py-2.5 rounded-full shadow-2xl transition-all duration-300 opacity-0 pointer-events-none z-[100] font-medium text-sm text-center min-w-[200px]">
+        Message
     </div>
 
-    <!-- Edit & Share Modal (Full Screen for Mobile) -->
-    <div id="policyModal" class="fixed inset-0 z-50 hidden bg-gray-100 flex flex-col modal-transition opacity-0 pointer-events-none max-w-xl mx-auto">
-        
-        <!-- Modal Header -->
-        <div class="bg-licBlue text-white px-4 py-4 shadow-md flex justify-between items-center z-10">
-            <h3 class="text-lg font-bold flex items-center gap-2" id="modalTitle">
-                <i class="fa-solid fa-file-lines text-licYellow"></i> Policy Details
-            </h3>
-            <button onclick="closeModal()" class="text-white bg-white bg-opacity-20 h-8 w-8 rounded-full flex items-center justify-center hover:bg-opacity-30 transition-colors">
-                <i class="fa-solid fa-xmark text-lg"></i>
-            </button>
-        </div>
-        
-        <!-- Modal Body (Scrollable with all fields) -->
-        <div class="p-4 overflow-y-auto flex-grow bg-gray-100 pb-24" id="modalBody">
-            <div class="flex flex-col gap-4">
-                
-                <!-- Personal Details Group -->
-                <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 flex flex-col gap-3">
-                    <p class="text-licBlue font-bold border-b border-gray-100 pb-2 mb-1"><i class="fa-solid fa-user-circle mr-1"></i> Personal Details</p>
-                    
-                    <div class="flex flex-col">
-                        <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Policy Holder Name</label>
-                        <input type="text" id="edit_name" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm">
-                    </div>
-                    
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="flex flex-col">
-                            <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">DOB</label>
-                            <input type="text" id="edit_dob" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm text-gray-700 bg-white">
-                        </div>
-                        <div class="flex flex-col">
-                            <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Mobile</label>
-                            <input type="text" id="edit_mobile" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm">
-                        </div>
-                    </div>
+    <!-- Main App Container -->
+    <div id="app" class="w-full max-w-md h-[100dvh] sm:h-[90vh] bg-gray-50 sm:rounded-[2rem] sm:shadow-2xl relative flex flex-col overflow-hidden sm:border-4 border-gray-800">
 
-                    <div class="flex flex-col">
-                        <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Email</label>
-                        <input type="email" id="edit_email" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm">
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Address</label>
-                        <textarea id="edit_address" rows="2" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm resize-none"></textarea>
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Nominee</label>
-                        <input type="text" id="edit_nominee" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm">
-                    </div>
-                </div>
-
-                <!-- Policy Details Group -->
-                <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-200 flex flex-col gap-3">
-                    <p class="text-licBlue font-bold border-b border-gray-100 pb-2 mb-1"><i class="fa-solid fa-shield-halved mr-1"></i> Policy Details</p>
-                    
-                    <div class="flex flex-col">
-                        <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Policy Number</label>
-                        <input type="text" id="edit_policyNo" class="w-full px-3 py-2.5 font-bold border border-gray-200 bg-gray-100 rounded-xl outline-none text-gray-800 text-sm">
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="flex flex-col">
-                            <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Plan</label>
-                            <input type="text" id="edit_plan" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm">
-                        </div>
-                        <div class="flex flex-col">
-                            <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Commencement Date</label>
-                            <input type="text" id="edit_doc" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm text-gray-700 bg-white">
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-3 gap-3">
-                        <div class="flex flex-col">
-                            <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Term</label>
-                            <input type="text" id="edit_term" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm">
-                        </div>
-                        <div class="flex flex-col">
-                            <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">PPT</label>
-                            <input type="text" id="edit_ppt" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm">
-                        </div>
-                        <div class="flex flex-col">
-                            <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Mode</label>
-                            <input type="text" id="edit_mode" placeholder="Y/H/Q/M" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm uppercase">
-                        </div>
-                    </div>
-
-                    <div class="flex flex-col">
-                        <label class="text-[11px] font-bold text-gray-500 mb-1 uppercase">Sum Assured (₹)</label>
-                        <input type="number" id="edit_sumAssured" class="w-full px-3 py-2.5 bg-gray-50 font-bold border border-gray-200 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-sm">
-                    </div>
-                </div>
-
-                <!-- Financial Group (Premium & FUP & Calculator) -->
-                <div class="bg-blue-50 p-4 rounded-2xl shadow-sm border border-blue-100 flex flex-col gap-3 relative">
-                    <p class="text-licBlue font-bold border-b border-blue-200 pb-2 mb-1"><i class="fa-solid fa-indian-rupee-sign mr-1"></i> Premium & FUP</p>
-                    
-                    <div class="flex flex-col">
-                        <label class="text-[11px] font-bold text-licBlue mb-1 uppercase">Premium (₹)</label>
-                        <input type="number" id="edit_premium" class="w-full px-3 py-2.5 bg-white font-bold border border-gray-300 rounded-xl focus:ring-2 focus:ring-licBlue outline-none text-gray-900 text-sm">
-                    </div>
-                    
-                    <div class="flex flex-col">
-                        <label class="text-[11px] font-bold text-licBlue mb-1 uppercase">Next FUP Date</label>
-                        <input type="text" id="edit_fup" class="w-full px-3 py-2.5 font-bold border-2 border-licBlue rounded-xl focus:ring-2 focus:ring-licYellow outline-none text-licBlue text-sm bg-white">
-                    </div>
-
-                    <!-- Calculate Total Premium Section -->
-                    <div class="bg-green-50 p-3 rounded-xl border border-green-200 flex flex-col items-center justify-center gap-2 mt-2 shadow-sm">
-                        <button onclick="calculateTotalPremium()" class="bg-[#1ebe57] text-white px-4 py-2 rounded-lg font-bold text-xs shadow-md hover:bg-green-600 transition-colors flex items-center gap-2">
-                            <i class="fa-solid fa-calculator"></i> Calculate Total Premium Paid
+        <!-- ================= HOME SCREEN ================= -->
+        <div id="home-screen" class="absolute inset-0 flex flex-col w-full h-full bg-gray-50 z-10 screen-transition">
+            
+            <!-- Header -->
+            <header class="bg-brand text-white p-4 shadow-md rounded-b-2xl z-20">
+                <div class="flex justify-between items-center mb-4">
+                    <div class="flex items-center gap-3">
+                        <button onclick="openModal('profile-modal')" class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition overflow-hidden border border-white/40" id="header-avatar-btn">
+                            <i class="fa-solid fa-user text-lg"></i>
                         </button>
-                        <div id="totalPremiumContainer" class="hidden w-full text-center mt-2 p-2 bg-white rounded-lg border border-green-100">
-                            <p class="text-[10px] text-green-600 font-bold uppercase tracking-wider">Total Deposited Amount</p>
-                            <p id="totalPremiumDisplay" class="text-xl font-bold text-green-800 mt-1">₹ 0</p>
+                        <div>
+                            <h1 class="text-lg font-bold tracking-wide leading-tight" id="header-biz-name" data-i18n="appTitle">Digital Khata</h1>
+                            <p class="text-[10px] text-white/70" data-i18n="myProfile">My Profile</p>
+                        </div>
+                    </div>
+                    <button onclick="openModal('settings-modal')" class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+
+                <!-- Dashboard Cards -->
+                <div class="flex bg-white rounded-xl p-3 shadow-lg w-full gap-2 text-gray-800 relative bottom-[-25px]">
+                    <div class="flex-1 text-center border-r border-gray-200">
+                        <p class="text-[11px] text-gray-500 font-semibold mb-1 uppercase" data-i18n="youWillGet">Aapko Milega</p>
+                        <p class="text-lg font-bold text-diya" id="total-udhaar">₹ 0</p>
+                    </div>
+                    <div class="flex-1 text-center">
+                        <p class="text-[11px] text-gray-500 font-semibold mb-1 uppercase" data-i18n="youWillGive">Aapko Dena Hai</p>
+                        <p class="text-lg font-bold text-mila" id="total-advance">₹ 0</p>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Search Bar -->
+            <div class="mt-8 px-4 pb-2 z-10">
+                <div class="relative">
+                    <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                    <input type="text" id="search-input" data-i18n-placeholder="searchPlaceholder" placeholder="Grahak ka naam khojein..." 
+                        class="w-full bg-white border border-gray-200 rounded-full py-2.5 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-brand/50 text-sm shadow-sm"
+                        oninput="filterCustomers()">
+                </div>
+            </div>
+
+            <!-- Customer List -->
+            <div class="flex-1 overflow-y-auto no-scrollbar pb-24 px-4 pt-2" id="customer-list"></div>
+
+            <!-- Add Customer FAB -->
+            <button onclick="openModal('add-customer-modal')" 
+                class="absolute bottom-6 right-6 bg-brand text-white h-14 rounded-full px-6 flex items-center gap-2 shadow-lg shadow-brand/40 hover:bg-brand/90 transition-all z-20 active:scale-95">
+                <i class="fa-solid fa-user-plus text-lg"></i>
+                <span class="font-semibold" data-i18n="addCustomerBtn">Grahak Jodein</span>
+            </button>
+        </div>
+
+
+        <!-- ================= CUSTOMER DETAIL SCREEN ================= -->
+        <div id="customer-screen" class="absolute inset-0 flex flex-col w-full h-full bg-gray-50 z-20 translate-x-full screen-transition hidden">
+            
+            <!-- Header -->
+            <header class="bg-brand text-white p-4 shadow-md flex justify-between items-center z-20">
+                <div class="flex items-center gap-3 flex-1 overflow-hidden">
+                    <button onclick="goBackToHome()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 transition shrink-0">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                    <div class="flex flex-col flex-1 truncate">
+                        <h2 class="text-lg font-bold truncate" id="detail-customer-name">Grahak</h2>
+                        <div class="flex items-center gap-2 text-[11px] text-white/80">
+                            <span id="detail-customer-phone"><i class="fa-solid fa-phone text-[9px]"></i> N/A</span>
+                            <span class="opacity-50">|</span>
+                            <span id="detail-customer-address" class="truncate max-w-[120px]"><i class="fa-solid fa-location-dot text-[9px]"></i> N/A</span>
                         </div>
                     </div>
                 </div>
-
-                <!-- Notification Area -->
-                <div class="text-center h-6 mb-4">
-                    <p id="saveMsg" class="text-green-600 font-bold text-sm hidden"><i class="fa-solid fa-check-circle"></i> Policy Saved Successfully!</p>
+                
+                <!-- Share & Delete Actions -->
+                <div class="flex gap-1 shrink-0">
+                    <button onclick="openModal('share-modal')" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 transition">
+                        <i class="fa-solid fa-share-nodes"></i>
+                    </button>
+                    <button onclick="deleteCustomerConfirm()" class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/20 transition text-red-200">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
                 </div>
+            </header>
 
+            <!-- Net Balance Banner -->
+            <div class="bg-white shadow-sm border-b border-gray-200 p-4 flex justify-between items-center z-10">
+                <span class="font-medium text-gray-600" data-i18n="netBalance">Kul Hisab</span>
+                <div class="text-right">
+                    <span id="detail-balance-amount" class="text-xl font-bold">₹ 0</span>
+                    <p id="detail-balance-status" class="text-xs font-semibold mt-0.5">Barabar</p>
+                </div>
+            </div>
+            
+            <!-- Tip -->
+            <div class="text-center py-1 bg-brand/5 border-b border-brand/10 text-[10px] text-gray-500">
+                <i class="fa-solid fa-circle-info mr-1"></i> Double-click on any entry to edit
+            </div>
+
+            <!-- Transaction List -->
+            <div class="flex-1 overflow-y-auto no-scrollbar p-4 bg-[#f8f9fa] flex flex-col gap-3 pb-24" id="transaction-list"></div>
+
+            <!-- Action Buttons Footer -->
+            <div class="absolute bottom-0 left-0 w-full bg-white p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] flex gap-3 z-20 rounded-t-2xl">
+                <button onclick="openTransactionModal('diya')" class="flex-1 bg-diya/10 border-2 border-diya text-diya py-3 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-diya/20 transition active:scale-95">
+                    <i class="fa-solid fa-minus"></i>
+                    <span data-i18n="gaveBtn">Aapne Diye</span>
+                </button>
+                <button onclick="openTransactionModal('mila')" class="flex-1 bg-mila/10 border-2 border-mila text-mila py-3 rounded-xl font-bold flex justify-center items-center gap-2 hover:bg-mila/20 transition active:scale-95">
+                    <i class="fa-solid fa-plus"></i>
+                    <span data-i18n="gotBtn">Aapko Mile</span>
+                </button>
             </div>
         </div>
+
+
+        <!-- ================= MODALS ================= -->
         
-        <!-- Modal Footer Actions (Sticky Bottom) -->
-        <div class="absolute bottom-0 w-full bg-white p-4 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] flex gap-3 z-20">
-            <button onclick="saveDetails()" class="flex-1 bg-licBlue text-white py-3.5 rounded-xl hover:bg-blue-800 transition-colors shadow-lg font-bold flex items-center justify-center gap-2 text-sm">
-                <i class="fa-solid fa-save"></i> Save All
-            </button>
-            <button onclick="shareViaWhatsApp()" class="flex-1 bg-[#25D366] text-white py-3.5 rounded-xl hover:bg-[#1ebe57] transition-colors shadow-lg font-bold flex items-center justify-center gap-2 text-sm">
-                <i class="fa-brands fa-whatsapp text-lg"></i> Share
-            </button>
+        <!-- Profile Modal -->
+        <div id="profile-modal" class="absolute inset-0 bg-black/60 z-50 modal-overlay hidden flex items-end sm:items-center justify-center opacity-0 transition-opacity">
+            <div class="bg-white w-full sm:w-11/12 rounded-t-3xl sm:rounded-3xl p-6 transform translate-y-full sm:translate-y-0 transition-transform duration-300 relative" id="profile-content">
+                <button onclick="closeModal('profile-modal')" class="absolute top-4 right-5 text-gray-400 hover:text-gray-600">
+                    <i class="fa-solid fa-times text-xl"></i>
+                </button>
+                <h3 class="text-xl font-bold text-gray-800 mb-6 text-center" data-i18n="myProfile">My Profile</h3>
+                
+                <div class="flex flex-col items-center gap-4">
+                    <div class="relative group cursor-pointer" onclick="document.getElementById('profile-pic-input').click()">
+                        <div class="w-24 h-24 rounded-full bg-gray-200 border-4 border-white shadow-lg overflow-hidden flex items-center justify-center text-gray-400 text-3xl" id="profile-img-preview">
+                            <i class="fa-solid fa-camera"></i>
+                        </div>
+                        <div class="absolute bottom-0 right-0 bg-brand text-white w-8 h-8 rounded-full flex items-center justify-center shadow-md">
+                            <i class="fa-solid fa-pencil text-xs"></i>
+                        </div>
+                        <input type="file" id="profile-pic-input" accept="image/*" class="hidden" onchange="handleProfilePic(event)">
+                    </div>
+                    
+                    <div class="w-full mt-2">
+                        <label class="block text-sm font-medium text-gray-600 mb-1" data-i18n="bizNameLabel">Business / Aapka Naam</label>
+                        <input type="text" id="profile-name" class="w-full border-b-2 border-gray-300 focus:border-brand py-2 outline-none transition-colors font-medium text-lg text-center" placeholder="e.g. Rahul Kirana">
+                    </div>
+                    
+                    <div class="w-full mt-2">
+                        <label class="block text-sm font-medium text-gray-600 mb-1" data-i18n="bizAddressLabel">Business Address (For PDF)</label>
+                        <input type="text" id="profile-address" class="w-full border-b-2 border-gray-300 focus:border-brand py-2 outline-none transition-colors text-center" placeholder="e.g. MG Road, Delhi">
+                    </div>
+                    
+                    <button onclick="saveProfile()" class="w-full bg-brand text-white py-3.5 rounded-xl font-bold mt-4 hover:bg-brand/90 transition shadow-lg">
+                        <span data-i18n="saveBtn">Save Karein</span>
+                    </button>
+                </div>
+            </div>
         </div>
-    </div>
 
-    <script>
-        let allPolicies = [];
-        let filteredPolicies = [];
-        let currentEditingPolicy = null;
-        let currentTimelineFilter = 'ALL';
-        let isAddingNew = false;
-
-        // --- Helper function to format DD/MM/YYYY to YYYY-MM-DD for date input fields ---
-        function formatToDateInput(dateStr) {
-            if (!dateStr || dateStr === '-' || dateStr === 'null') return '';
-            let parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
-            if (parts.length === 3) {
-                return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            }
-            return '';
-        }
-
-        // --- Helper function to format YYYY-MM-DD to DD/MM/YYYY for CSV/Display ---
-        function formatToDDMMYYYY(dateStr) {
-            if (!dateStr) return '';
-            let parts = dateStr.split('-');
-            if (parts.length === 3) {
-                return `${parts[2]}/${parts[1]}/${parts[0]}`;
-            }
-            return '';
-        }
-
-        // --- Load Data from Browser Memory (Local Storage) on Startup ---
-        window.onload = function() {
-            try {
-                const savedLogo = localStorage.getItem('lic_app_logo');
-                if(savedLogo) {
-                    document.getElementById('appLogo').src = savedLogo;
-                }
-
-                const savedData = localStorage.getItem('lic_policies_data');
-                if (savedData) {
-                    allPolicies = JSON.parse(savedData);
-                    document.getElementById('sortSelect').value = "SNo-asc";
-                    setFupFilter('ALL'); 
-                } else {
-                    renderList([]); 
-                }
-            } catch (e) {
-                console.error("Storage Error:", e);
-                renderList([]);
-            }
-        }
-
-        function saveToLocalStorage() {
-            try {
-                localStorage.setItem('lic_policies_data', JSON.stringify(allPolicies));
-            } catch (e) {
-                alert("Failed to save data permanently. Browser storage might be full.");
-            }
-        }
-
-        function updateLogo(event) {
-            const file = event.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const logoData = e.target.result;
-                    document.getElementById('appLogo').src = logoData;
-                    try { localStorage.setItem('lic_app_logo', logoData); } catch(err){} 
-                }
-                reader.readAsDataURL(file);
-            }
-        }
-
-        function handleFileUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                processCSVData(e.target.result);
-            };
-            reader.readAsText(file);
-        }
-
-        function processCSVData(csvText) {
-            let lines = csvText.split('\n');
-            let headerIndex = 0;
-            
-            for(let i = 0; i < lines.length; i++) {
-                if(lines[i].includes('Policy Number') && (lines[i].includes('Policy Holder') || lines[i].includes('Name'))) {
-                    headerIndex = i;
-                    break;
-                }
-            }
-            
-            let validCSV = lines.slice(headerIndex).join('\n');
-
-            Papa.parse(validCSV, {
-                header: true,
-                skipEmptyLines: true,
-                complete: function(results) {
-                    allPolicies = [];
-                    let serialCounter = 1;
-
-                    results.data.forEach(row => {
-                        const policyNo = row['Policy Number'] || row['Policy No'];
-                        const policyName = row['Policy Holder'] || row['Name'];
-                        
-                        if (policyNo && policyName) {
-                            let cleanedRow = { ...row };
-                            cleanedRow['Policy Number'] = String(policyNo).trim();
-                            cleanedRow['Policy Holder'] = String(policyName).trim();
-                            
-                            const existingSNo = parseInt(cleanedRow['SNo']);
-                            if (isNaN(existingSNo)) {
-                                cleanedRow['SNo'] = serialCounter;
-                            }
-                            
-                            allPolicies.push(cleanedRow);
-                            serialCounter++;
-                        }
-                    });
-
-                    saveToLocalStorage(); 
-                    document.getElementById('sortSelect').value = "SNo-asc";
-                    setFupFilter('ALL'); 
-                }
-            });
-        }
-
-        function exportToCSV() {
-            if(allPolicies.length === 0) {
-                alert("No data available to download!");
-                return;
-            }
-            const csv = Papa.unparse(allPolicies);
-            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-            link.setAttribute("download", "updated_lic_policies.csv");
-            link.style.visibility = 'hidden';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-
-        function setFupFilter(filterType) {
-            currentTimelineFilter = filterType;
-            const ids = ['ALL', 'CURRENT', 'NEXT', 'LAST_6', 'CUSTOM'];
-            ids.forEach(id => {
-                const btn = document.getElementById('filter_' + id);
-                if (id === filterType) {
-                    btn.className = "px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap bg-licBlue text-white shadow-sm transition-colors border border-licBlue";
-                } else {
-                    btn.className = "px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap bg-white text-gray-600 border border-gray-300 shadow-sm transition-colors";
-                }
-            });
-
-            if(filterType === 'CUSTOM') {
-                document.getElementById('customDateContainer').classList.remove('hidden');
-            } else {
-                document.getElementById('customDateContainer').classList.add('hidden');
-                applyFilters();
-            }
-        }
-
-        function checkFupTimeline(fupDateStr) {
-            if (currentTimelineFilter === 'ALL') return true;
-            if (!fupDateStr || fupDateStr === '-' || fupDateStr === 'null') return false;
-
-            let parts = fupDateStr.includes('/') ? fupDateStr.split('/') : fupDateStr.split('-');
-            if (parts.length !== 3) return false;
-
-            let fupDate = new Date(parts[2], parseInt(parts[1]) - 1, parts[0]);
-            let now = new Date();
-            let currentMonth = now.getMonth();
-            let currentYear = now.getFullYear();
-
-            if (currentTimelineFilter === 'CURRENT') {
-                return fupDate.getMonth() === currentMonth && fupDate.getFullYear() === currentYear;
-            } 
-            else if (currentTimelineFilter === 'NEXT') {
-                let nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
-                let nextYear = currentMonth === 11 ? currentYear + 1 : currentYear;
-                return fupDate.getMonth() === nextMonth && fupDate.getFullYear() === nextYear;
-            } 
-            else if (currentTimelineFilter === 'LAST_6') {
-                let sixMonthsAgo = new Date();
-                sixMonthsAgo.setMonth(now.getMonth() - 6);
-                sixMonthsAgo.setDate(1); 
-                sixMonthsAgo.setHours(0,0,0,0);
-                let startOfCurrentMonth = new Date(currentYear, currentMonth, 1);
-                return fupDate >= sixMonthsAgo && fupDate < startOfCurrentMonth;
-            }
-            else if (currentTimelineFilter === 'CUSTOM') {
-                let fromVal = document.getElementById('customFromDate').value;
-                let toVal = document.getElementById('customToDate').value;
-                if (!fromVal || !toVal) return true; 
-
-                let fromParts = fromVal.split('-');
-                let toParts = toVal.split('-');
-                let fromDate = new Date(fromParts[0], parseInt(fromParts[1]) - 1, fromParts[2]);
-                let toDate = new Date(toParts[0], parseInt(toParts[1]) - 1, toParts[2]);
+        <!-- Add Customer Modal -->
+        <div id="add-customer-modal" class="absolute inset-0 bg-black/60 z-50 modal-overlay hidden flex items-end sm:items-center justify-center opacity-0 transition-opacity">
+            <div class="bg-white w-full sm:w-11/12 rounded-t-3xl sm:rounded-3xl p-6 transform translate-y-full sm:translate-y-0 transition-transform duration-300" id="add-customer-content">
+                <div class="flex justify-between items-center mb-5">
+                    <h3 class="text-xl font-bold text-gray-800" data-i18n="addNewCustTitle">Naya Grahak Jodein</h3>
+                    <button onclick="closeModal('add-customer-modal')" class="text-gray-400 hover:text-gray-600">
+                        <i class="fa-solid fa-times text-xl"></i>
+                    </button>
+                </div>
                 
-                return fupDate >= fromDate && fupDate <= toDate;
-            }
-            return true;
-        }
-
-        function applyFilters() {
-            const searchName = document.getElementById('searchName').value.toLowerCase();
-            const searchNumber = document.getElementById('searchNumber').value.toLowerCase();
-
-            filteredPolicies = allPolicies.filter(policy => {
-                const name = String(policy['Policy Holder'] || '').toLowerCase();
-                const num = String(policy['Policy Number'] || '').toLowerCase();
-                
-                const matchesSearch = name.includes(searchName) && num.includes(searchNumber);
-                const matchesTimeline = checkFupTimeline(policy['FUP Date']);
-                
-                return matchesSearch && matchesTimeline;
-            });
-
-            handleSort();
-        }
-
-        function getSortableDate(dateStr) {
-            if (!dateStr || dateStr === '-' || dateStr === 'null') return '00000000';
-            let parts = dateStr.includes('/') ? dateStr.split('/') : dateStr.split('-');
-            if (parts.length === 3) return parts[2] + parts[1].padStart(2, '0') + parts[0].padStart(2, '0');
-            return '00000000';
-        }
-
-        function handleSort() {
-            const sortVal = document.getElementById('sortSelect').value.split('-');
-            const column = sortVal[0];
-            const isAscending = sortVal[1] === 'asc';
-
-            filteredPolicies.sort((a, b) => {
-                let valA = a[column] || '';
-                let valB = b[column] || '';
-
-                if (column === 'SNo' || column === 'Premium') {
-                    valA = parseFloat(valA) || 0;
-                    valB = parseFloat(valB) || 0;
-                } else if (column === 'FUP Date') {
-                    valA = getSortableDate(valA);
-                    valB = getSortableDate(valB);
-                } else {
-                    valA = String(valA).toLowerCase();
-                    valB = String(valB).toLowerCase();
-                }
-
-                if (valA < valB) return isAscending ? -1 : 1;
-                if (valA > valB) return isAscending ? 1 : -1;
-                return 0;
-            });
-            renderList(filteredPolicies);
-        }
-
-        function renderList(data) {
-            const container = document.getElementById('policyListContainer');
-            const noDataMsg = document.getElementById('noDataMessage');
-            const resultCount = document.getElementById('resultCount');
-            const emptyTitle = document.getElementById('emptyTitle');
-            const emptyDesc = document.getElementById('emptyDesc');
-            
-            container.innerHTML = '';
-            resultCount.innerText = `${data.length} Policies`;
-
-            if (data.length === 0) {
-                if (allPolicies.length > 0) {
-                    emptyTitle.innerText = "No Matches Found";
-                    emptyDesc.innerText = "Try changing search or timeline filter.";
-                } else {
-                    emptyTitle.innerText = "Welcome to LIC Manager";
-                    emptyDesc.innerText = "Please upload your CSV file once. It will be saved permanently.";
-                }
-                noDataMsg.classList.remove('hidden');
-                return;
-            } else {
-                noDataMsg.classList.add('hidden');
-            }
-
-            data.forEach((policy) => {
-                const card = document.createElement('div');
-                card.className = "bg-white p-4 rounded-2xl shadow-sm border border-gray-200 relative";
-                
-                const sNo = policy['SNo'] || '-';
-                const name = policy['Policy Holder'] || '-';
-                const pNo = policy['Policy Number'] || '-';
-                const fup = policy['FUP Date'] || '-';
-                const premium = policy['Premium'] || '-';
-                const initial = name !== '-' ? name.charAt(0) : 'U';
-
-                card.innerHTML = `
-                    <div class="absolute top-3 right-4 bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-200">
-                        #${sNo}
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1"><span data-i18n="custNameLabel">Grahak ka Naam</span> <span class="text-red-500">*</span></label>
+                        <input type="text" id="new-cust-name" class="w-full border-b-2 border-gray-300 focus:border-brand py-2 outline-none transition-colors">
                     </div>
-                    <div class="flex items-start gap-3 mb-4">
-                        <div class="h-12 w-12 rounded-full bg-blue-50 border border-blue-100 text-licBlue flex items-center justify-center font-bold text-xl flex-shrink-0">
-                            ${initial}
-                        </div>
-                        <div class="pt-1 pr-6">
-                            <p class="font-bold text-gray-900 text-base leading-tight">${name}</p>
-                            <button onclick="openModal('${pNo}')" class="text-licBlue font-bold text-sm mt-1 decoration-2 underline-offset-4 underline flex items-center gap-1 active:text-licYellow">
-                                ${pNo} <i class="fa-solid fa-pen-to-square text-[10px]"></i>
-                            </button>
-                        </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1" data-i18n="custPhoneLabel">Mobile Number</label>
+                        <input type="tel" id="new-cust-phone" class="w-full border-b-2 border-gray-300 focus:border-brand py-2 outline-none transition-colors" placeholder="10 digits">
                     </div>
-                    <div class="grid grid-cols-2 gap-2 bg-gray-50 rounded-xl p-3 border border-gray-100">
-                        <div>
-                            <p class="text-gray-400 font-bold text-[10px] uppercase tracking-wide">Premium</p>
-                            <p class="font-bold text-gray-800 text-sm mt-0.5">₹ ${premium}</p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-gray-400 font-bold text-[10px] uppercase tracking-wide">Next FUP</p>
-                            <div class="inline-block mt-0.5 px-2 py-1 bg-green-100 border border-green-200 text-green-800 rounded font-bold text-xs">
-                                ${fup}
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1" data-i18n="custAddressLabel">Pata (Address)</label>
+                        <input type="text" id="new-cust-address" class="w-full border-b-2 border-gray-300 focus:border-brand py-2 outline-none transition-colors" placeholder="Ghar/Dukan ka pata">
+                    </div>
+                    <button onclick="saveCustomer()" class="w-full bg-brand text-white py-3.5 rounded-xl font-bold mt-4 hover:bg-brand/90 transition shadow-lg shadow-brand/30">
+                        <span data-i18n="saveBtn">Save Karein</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add/Edit Transaction Modal -->
+        <div id="add-transaction-modal" class="absolute inset-0 bg-black/60 z-50 modal-overlay hidden flex items-end sm:items-center justify-center opacity-0 transition-opacity">
+            <div class="bg-white w-full sm:w-11/12 rounded-t-3xl sm:rounded-3xl p-6 transform translate-y-full sm:translate-y-0 transition-transform duration-300 relative" id="add-tx-content">
+                
+                <!-- Delete Button (Only visible during edit) -->
+                <button id="delete-tx-btn" onclick="deleteTransaction()" class="absolute top-6 left-6 text-red-500 hover:bg-red-50 w-8 h-8 rounded-full flex items-center justify-center transition hidden">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+
+                <div class="flex justify-between items-center mb-5 pl-10">
+                    <h3 class="text-xl font-bold" id="tx-modal-title">Darj Karein</h3>
+                    <button onclick="closeModal('add-transaction-modal')" class="text-gray-400 hover:text-gray-600">
+                        <i class="fa-solid fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <input type="hidden" id="tx-type" value="">
+                <input type="hidden" id="tx-id" value=""> <!-- For Edit tracking -->
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1"><span data-i18n="amountLabel">Rakam (Amount) ₹</span> <span class="text-red-500">*</span></label>
+                        <input type="number" id="tx-amount" class="w-full text-3xl font-bold border-b-2 border-gray-300 focus:border-gray-500 py-2 outline-none transition-colors" placeholder="0">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1" data-i18n="detailsLabel">Vivaran (Details)</label>
+                        <input type="text" id="tx-note" class="w-full border-b-2 border-gray-300 focus:border-gray-500 py-2 outline-none transition-colors">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-600 mb-1" data-i18n="dateLabel">Tareekh (Date)</label>
+                        <input type="date" id="tx-date" class="w-full border-b-2 border-gray-300 focus:border-gray-500 py-2 outline-none transition-colors text-gray-700">
+                    </div>
+                    
+                    <button id="save-tx-btn" onclick="saveTransaction()" class="w-full py-3.5 rounded-xl font-bold mt-4 transition shadow-lg text-white">
+                        <span data-i18n="saveBtn">Save Karein</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Share & PDF Modal -->
+        <div id="share-modal" class="absolute inset-0 bg-black/60 z-50 modal-overlay hidden flex items-end sm:items-center justify-center opacity-0 transition-opacity">
+            <div class="bg-white w-full sm:w-11/12 rounded-t-3xl sm:rounded-3xl p-6 transform translate-y-full sm:translate-y-0 transition-transform duration-300" id="share-content">
+                <div class="flex justify-between items-center mb-5">
+                    <h3 class="text-xl font-bold text-gray-800" data-i18n="shareTitle">Share / Download PDF</h3>
+                    <button onclick="closeModal('share-modal')" class="text-gray-400 hover:text-gray-600">
+                        <i class="fa-solid fa-times text-xl"></i>
+                    </button>
+                </div>
+                <p class="text-sm text-gray-500 mb-4" data-i18n="shareDesc">Grahak ko unka hisab WhatsApp par bhejein ya PDF डाउनलोड karein.</p>
+                
+                <div class="space-y-3">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="shareTextStatement('mini')" class="w-full bg-[#E8F5E9] border border-[#4CAF50] text-[#2E7D32] py-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 hover:bg-[#C8E6C9] transition">
+                            <i class="fa-brands fa-whatsapp text-2xl"></i>
+                            <span class="text-sm" data-i18n="miniStmtText">Share Text</span>
+                        </button>
+                        <button onclick="generatePDF('mini')" class="w-full bg-red-50 border border-red-400 text-red-600 py-3 rounded-xl font-bold flex flex-col items-center justify-center gap-1 hover:bg-red-100 transition relative">
+                            <i class="fa-solid fa-file-pdf text-2xl"></i>
+                            <span class="text-sm" data-i18n="miniStmtPdf">Mini PDF</span>
+                            <div id="pdf-loading-mini" class="absolute inset-0 bg-red-100/90 rounded-xl flex items-center justify-center hidden">
+                                <i class="fa-solid fa-spinner fa-spin text-xl"></i>
+                            </div>
+                        </button>
+                    </div>
+
+                    <div class="border-t border-gray-100 my-2"></div>
+                    
+                    <button onclick="generatePDF('full')" class="w-full bg-blue-50 border border-blue-400 text-blue-700 py-4 rounded-xl font-bold flex items-center justify-between px-4 hover:bg-blue-100 transition relative">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-file-invoice text-xl"></i>
+                            <div class="text-left">
+                                <span class="block" data-i18n="fullStmtPdf">Download Full PDF Report</span>
+                                <span class="text-xs font-normal opacity-80" data-i18n="fullStmtDesc">Sari details ke sath bill format mein</span>
                             </div>
                         </div>
+                        <i class="fa-solid fa-download text-xl"></i>
+                        <div id="pdf-loading-full" class="absolute inset-0 bg-blue-100/90 rounded-xl flex items-center justify-center hidden">
+                            <i class="fa-solid fa-spinner fa-spin text-2xl"></i>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="absolute inset-0 bg-black/60 z-50 modal-overlay hidden flex items-end sm:items-center justify-center opacity-0 transition-opacity">
+            <div class="bg-white w-full sm:w-11/12 rounded-t-3xl sm:rounded-3xl p-6 transform translate-y-full sm:translate-y-0 transition-transform duration-300" id="settings-content">
+                <div class="flex justify-between items-center mb-5">
+                    <h3 class="text-xl font-bold text-gray-800" data-i18n="settingsTitle">Settings</h3>
+                    <button onclick="closeModal('settings-modal')" class="text-gray-400 hover:text-gray-600">
+                        <i class="fa-solid fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-200">
+                        <div class="flex items-center gap-3 text-gray-700 font-medium">
+                            <i class="fa-solid fa-language text-xl text-brand"></i>
+                            <span data-i18n="appLang">App Language</span>
+                        </div>
+                        <div class="flex bg-gray-200 rounded-lg p-1 text-sm font-bold">
+                            <button onclick="setLanguage('en')" id="btn-lang-en" class="px-4 py-1.5 rounded-md transition text-gray-500">EN</button>
+                            <button onclick="setLanguage('hi')" id="btn-lang-hi" class="px-4 py-1.5 rounded-md bg-white shadow text-brand">HI</button>
+                        </div>
                     </div>
-                `;
-                container.appendChild(card);
+
+                    <div class="border-t border-gray-200 my-2"></div>
+                    
+                    <button onclick="backupData()" class="w-full bg-brand/10 border-2 border-brand text-brand py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+                        <i class="fa-solid fa-download"></i> <span data-i18n="backupBtn">Data Backup</span>
+                    </button>
+                    <button onclick="document.getElementById('restore-input').click()" class="w-full bg-green-100 border-2 border-green-600 text-green-700 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition">
+                        <i class="fa-solid fa-upload"></i> <span data-i18n="restoreBtn">Data Restore</span>
+                    </button>
+                    <input type="file" id="restore-input" accept=".json" class="hidden" onchange="restoreData(event)">
+                    
+                    <button onclick="clearAllData()" class="w-full text-red-500 py-2 mt-4 font-semibold hover:bg-red-50 rounded-lg transition" data-i18n="clearDataBtn">
+                        Delete All Data
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Hidden Template for PDF Generation (Fixed Visibility) -->
+    <div id="pdf-template-container"></div>
+
+    <!-- Application Logic -->
+    <script>
+        // --- TRANSLATIONS ---
+        const i18n = {
+            hi: {
+                appTitle: "डिजिटल खाता", myProfile: "मेरी प्रोफाइल", youWillGet: "आपको मिलेगा (उधार)", youWillGive: "आपको देना है (एडवांस)",
+                searchPlaceholder: "ग्राहक का नाम खोजें...", addCustomerBtn: "ग्राहक जोड़ें", netBalance: "कुल हिसाब", gaveBtn: "आपने दिए",
+                gotBtn: "आपको मिले", bizNameLabel: "दुकान / आपका नाम", bizAddressLabel: "दुकान का पता (PDF के लिए)", saveBtn: "सेव करें",
+                addNewCustTitle: "नया ग्राहक जोड़ें", custNameLabel: "ग्राहक का नाम", custPhoneLabel: "मोबाइल नंबर (वैकल्पिक)",
+                custAddressLabel: "पता (Address)", amountLabel: "रकम (Amount) ₹", detailsLabel: "विवरण (Details)", dateLabel: "तारीख (Date)",
+                shareTitle: "हिसाब शेयर / PDF", shareDesc: "ग्राहक को उनका हिसाब WhatsApp पर भेजें या PDF डाउनलोड करें।",
+                miniStmtText: "WhatsApp Message", miniStmtPdf: "Mini PDF (छोटा)", fullStmtPdf: "Full Report PDF डाउनलोड करें",
+                fullStmtDesc: "सभी लेन-देन के साथ बिल फॉर्मेट में", settingsTitle: "सेटिंग्स", appLang: "ऐप की भाषा", backupBtn: "डेटा बैकअप",
+                restoreBtn: "डेटा रिस्टोर", clearDataBtn: "सभी डेटा डिलीट करें", noCustFound: "कोई ग्राहक नहीं मिला", settled: "हिसाब बराबर",
+                udhaarText: "उधार", advanceText: "एडवांस", noTxText: "कोई लेन-देन नहीं हुआ है", today: "आज", yesterday: "कल",
+                willGetDetail: "आपको मिलेंगे (उधार)", willGiveDetail: "आपको देने हैं (एडवांस)", txTitleGave: "आपने दिए (उधार)", txTitleGot: "आपको मिले (जमा)",
+                pdfTitle: "खाता स्टेटमेंट", pdfDate: "तारीख:", pdfTime: "समय:", pdfCustName: "ग्राहक का नाम:", pdfCustPhone: "मोबाइल:",
+                pdfCustAddr: "पता:", pdfSn: "क्र.सं.", pdfDesc: "विवरण", pdfDateCol: "तारीख", pdfDiya: "दिए (Debit)", pdfMila: "मिले (Credit)",
+                pdfTotalDue: "कुल बाकी (उधार):", pdfTotalAdv: "कुल एडवांस जमा:", pdfFooter: "यह एक कंप्यूटर जनरेटेड स्टेटमेंट है।",
+                editTxTitle: "लेन-देन अपडेट करें", updateBtn: "अपडेट करें"
+            },
+            en: {
+                appTitle: "Digital Khata", myProfile: "My Profile", youWillGet: "You Will Get", youWillGive: "You Will Give",
+                searchPlaceholder: "Search customer name...", addCustomerBtn: "Add Customer", netBalance: "Net Balance", gaveBtn: "You Gave",
+                gotBtn: "You Got", bizNameLabel: "Business / Your Name", bizAddressLabel: "Business Address (For PDF)", saveBtn: "Save",
+                addNewCustTitle: "Add New Customer", custNameLabel: "Customer Name", custPhoneLabel: "Mobile Number (Optional)",
+                custAddressLabel: "Address", amountLabel: "Amount ₹", detailsLabel: "Details", dateLabel: "Date",
+                shareTitle: "Share / PDF", shareDesc: "Send text on WhatsApp or download PDF statement.",
+                miniStmtText: "WhatsApp Message", miniStmtPdf: "Mini PDF", fullStmtPdf: "Download Full Report PDF",
+                fullStmtDesc: "Invoice format with all transactions", settingsTitle: "Settings", appLang: "App Language", backupBtn: "Backup Data",
+                restoreBtn: "Restore Data", clearDataBtn: "Delete All Data", noCustFound: "No customer found", settled: "Settled",
+                udhaarText: "Due", advanceText: "Advance", noTxText: "No transactions yet", today: "Today", yesterday: "Yesterday",
+                willGetDetail: "Customer will pay you", willGiveDetail: "You have to pay", txTitleGave: "You Gave (Debit)", txTitleGot: "You Got (Credit)",
+                pdfTitle: "Account Statement", pdfDate: "Date:", pdfTime: "Time:", pdfCustName: "Customer Name:", pdfCustPhone: "Mobile:",
+                pdfCustAddr: "Address:", pdfSn: "S.No", pdfDesc: "Description", pdfDateCol: "Date", pdfDiya: "Debit (-)", pdfMila: "Credit (+)",
+                pdfTotalDue: "Total Due:", pdfTotalAdv: "Total Advance:", pdfFooter: "This is a computer generated statement.",
+                editTxTitle: "Edit Transaction", updateBtn: "Update"
+            }
+        };
+
+        const LOCAL_STORAGE_KEY = 'digital_khata_pro_data';
+        let state = { profile: { name: '', avatar: '', address: '' }, lang: 'hi', customers: [], currentCustomerId: null };
+        const t = (key) => i18n[state.lang][key] || key;
+
+        const applyTranslations = () => {
+            document.querySelectorAll('[data-i18n]').forEach(el => { const k = el.getAttribute('data-i18n'); if (i18n[state.lang][k]) el.innerText = i18n[state.lang][k]; });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => { const k = el.getAttribute('data-i18n-placeholder'); if (i18n[state.lang][k]) el.placeholder = i18n[state.lang][k]; });
+            const bEn = document.getElementById('btn-lang-en'), bHi = document.getElementById('btn-lang-hi');
+            if(state.lang === 'en') { bEn.className = "px-4 py-1.5 rounded-md bg-white shadow text-brand font-bold"; bHi.className = "px-4 py-1.5 rounded-md transition text-gray-500 font-bold"; }
+            else { bHi.className = "px-4 py-1.5 rounded-md bg-white shadow text-brand font-bold"; bEn.className = "px-4 py-1.5 rounded-md transition text-gray-500 font-bold"; }
+            if(state.currentCustomerId) renderCustomerScreen(); renderHomeList(); updateProfileUI();
+        };
+
+        const setLanguage = (lang) => { state.lang = lang; saveDataLocally(); applyTranslations(); };
+        const showToast = (msg, isErr=false) => { const t = document.getElementById('toast'); t.innerText=msg; t.className=`fixed top-5 left-1/2 transform -translate-x-1/2 px-5 py-2.5 rounded-full shadow-2xl transition-all duration-300 z-[100] font-medium text-sm text-center min-w-[200px] ${isErr?'bg-red-600 text-white':'bg-gray-800 text-white'}`; t.classList.remove('opacity-0'); setTimeout(()=>t.classList.add('opacity-0'),3000); };
+        const saveDataLocally = () => localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+        
+        const loadDataLocally = () => {
+            const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (saved) { try { const p = JSON.parse(saved); state.customers = p.customers||[]; state.profile = p.profile||{name:'',avatar:'',address:''}; state.lang = p.lang||'hi'; }catch(e){} }
+            else { state.customers = [{id:'1',name:'Ramesh Kirana',phone:'9876543210',address:'Main Bazar',transactions:[{id:'t1',type:'diya',amount:500,note:'Samaan',date:new Date().toISOString()}]}]; saveDataLocally(); }
+        };
+
+        const handleProfilePic = (e) => { const f = e.target.files[0]; if(f){ if(f.size>2*1024*1024) return showToast("Image too large",true); const r = new FileReader(); r.onload = (ev) => { const p = document.getElementById('profile-img-preview'); p.innerHTML=`<img src="${ev.target.result}" class="w-full h-full avatar-img">`; p.dataset.base64=ev.target.result; }; r.readAsDataURL(f); } };
+        const saveProfile = () => { state.profile = { name: document.getElementById('profile-name').value.trim(), address: document.getElementById('profile-address').value.trim(), avatar: document.getElementById('profile-img-preview').dataset.base64 || state.profile.avatar }; saveDataLocally(); updateProfileUI(); closeModal('profile-modal'); showToast(t('saveBtn')); };
+        const updateProfileUI = () => { 
+            document.getElementById('header-biz-name').innerText = state.profile.name || t('appTitle');
+            const ab = document.getElementById('header-avatar-btn');
+            ab.innerHTML = state.profile.avatar ? `<img src="${state.profile.avatar}" class="w-full h-full avatar-img">` : `<i class="fa-solid fa-user text-lg"></i>`;
+            document.getElementById('profile-name').value = state.profile.name||''; document.getElementById('profile-address').value = state.profile.address||'';
+            if(state.profile.avatar) { const p = document.getElementById('profile-img-preview'); p.innerHTML=`<img src="${state.profile.avatar}" class="w-full h-full avatar-img">`; p.dataset.base64=state.profile.avatar; }
+        };
+
+        const formatMoney = (amt) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amt);
+        const formatDate = (iso, hideRel=false) => { const d = new Date(iso), tdy = new Date(), yst = new Date(tdy); yst.setDate(yst.getDate()-1); if(!hideRel) { if (d.toDateString()===tdy.toDateString()) return t('today'); if (d.toDateString()===yst.toDateString()) return t('yesterday'); } return d.toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'}); };
+        const getCustomerBalance = (cust) => { let d=0,m=0; cust.transactions.forEach(tx=>{ if(tx.type==='diya')d+=Number(tx.amount); if(tx.type==='mila')m+=Number(tx.amount); }); return d-m; };
+        
+        const updateDashboardTotals = () => { let u=0,a=0; state.customers.forEach(c=>{ const b=getCustomerBalance(c); if(b>0)u+=b; else if(b<0)a+=Math.abs(b); }); document.getElementById('total-udhaar').innerText = formatMoney(u); document.getElementById('total-advance').innerText = formatMoney(a); };
+        
+        const renderHomeList = (q='') => {
+            const list = document.getElementById('customer-list'); list.innerHTML='';
+            const f = state.customers.filter(c=>c.name.toLowerCase().includes(q.toLowerCase()));
+            if(!f.length) return list.innerHTML=`<div class="flex flex-col items-center justify-center text-gray-400 mt-20"><i class="fa-solid fa-users text-4xl mb-3 opacity-50"></i><p>${t('noCustFound')}</p></div>`;
+            f.sort((a,b)=> (b.transactions.length?new Date(b.transactions[b.transactions.length-1].date).getTime():0) - (a.transactions.length?new Date(a.transactions[a.transactions.length-1].date).getTime():0));
+            f.forEach(c => {
+                const bal = getCustomerBalance(c);
+                const isDue = bal>0, isAdv = bal<0;
+                const el = document.createElement('div'); el.className="flex justify-between p-4 bg-white mb-2 rounded-2xl shadow-sm border border-gray-100 cursor-pointer hover:bg-gray-50 active:scale-[0.98]"; el.onclick=()=>openCustomer(c.id);
+                el.innerHTML = `
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <div class="w-10 h-10 shrink-0 rounded-full bg-brand/10 text-brand flex items-center justify-center font-bold">${c.name[0].toUpperCase()}</div>
+                        <div class="truncate"><h4 class="font-semibold text-gray-800 truncate">${c.name}</h4><p class="text-xs text-gray-500 truncate">${c.address?`<i class="fa-solid fa-location-dot text-[9px] mr-1"></i>${c.address}`:(c.phone?`<i class="fa-solid fa-phone text-[9px] mr-1"></i>${c.phone}`:'')}</p></div>
+                    </div>
+                    <div class="text-right flex flex-col items-end shrink-0 pl-2">
+                        <div class="${isDue?'text-diya font-bold':(isAdv?'text-mila font-bold':'text-gray-500')}">${bal===0?t('settled'):formatMoney(Math.abs(bal))}</div>
+                        ${bal!==0?`<span class="text-[10px] text-gray-400">${isDue?t('udhaarText'):t('advanceText')}</span>`:''}
+                    </div>`;
+                list.appendChild(el);
             });
-        }
+            updateDashboardTotals();
+        };
 
-        function openAddModal() {
-            isAddingNew = true;
-            currentEditingPolicy = null;
-            document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-plus-circle text-licYellow"></i> Add New Policy';
+        const renderCustomerScreen = () => {
+            const cust = state.customers.find(c=>c.id===state.currentCustomerId); if(!cust) return;
+            document.getElementById('detail-customer-name').innerText=cust.name;
+            document.getElementById('detail-customer-phone').innerHTML=cust.phone?`<i class="fa-solid fa-phone text-[9px]"></i> ${cust.phone}`:'N/A';
+            document.getElementById('detail-customer-address').innerHTML=cust.address?`<i class="fa-solid fa-location-dot text-[9px]"></i> ${cust.address}`:'N/A';
+            const bal = getCustomerBalance(cust);
+            const amtE = document.getElementById('detail-balance-amount'), statE = document.getElementById('detail-balance-status');
+            amtE.innerText = bal===0?'₹ 0':formatMoney(Math.abs(bal));
+            amtE.className = `text-xl font-bold ${bal===0?'text-gray-800':(bal>0?'text-diya':'text-mila')}`;
+            statE.innerText = bal===0?t('settled'):(bal>0?t('willGetDetail'):t('willGiveDetail'));
+            statE.className = `text-xs font-semibold mt-0.5 ${bal===0?'text-gray-500':(bal>0?'text-diya':'text-mila')}`;
+
+            const list = document.getElementById('transaction-list'); list.innerHTML='';
+            if(!cust.transactions.length) return list.innerHTML=`<div class="flex flex-col items-center justify-center text-gray-400 mt-20"><i class="fa-solid fa-receipt text-4xl mb-3 opacity-40"></i><p>${t('noTxText')}</p></div>`;
+            let ld='';
+            [...cust.transactions].sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(tx => {
+                const ds = formatDate(tx.date); if(ds!==ld){ list.innerHTML+=`<div class="text-center my-2"><span class="bg-gray-200 text-gray-600 text-[10px] font-bold px-3 py-1 rounded-full uppercase">${ds}</span></div>`; ld=ds; }
+                const isD = tx.type==='diya';
+                
+                // Added ondblclick for edit
+                const txEl = document.createElement('div');
+                txEl.className = `flex w-full mt-1 mb-2 ${!isD ? 'justify-end' : ''}`;
+                txEl.innerHTML = `
+                    <div class="bg-white border-${isD?'l':'r'}-4 border-${isD?'diya':'mila'} rounded-${isD?'r-xl rounded-bl-xl':'l-xl rounded-br-xl'} shadow-sm p-3 w-[75%] editable-item" 
+                         ondblclick="editTransaction('${tx.id}')">
+                        <span class="text-lg font-bold text-gray-800">${formatMoney(tx.amount)}</span>
+                        ${tx.note?`<p class="text-sm text-gray-600">${tx.note}</p>`:''}
+                        <p class="text-[10px] text-gray-400 mt-2 text-right">${new Date(tx.date).toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'})}</p>
+                    </div>`;
+                
+                // Add touch support for mobile (long press)
+                let pressTimer;
+                const txCard = txEl.querySelector('.editable-item');
+                txCard.addEventListener('touchstart', () => { pressTimer = setTimeout(() => editTransaction(tx.id), 800); });
+                txCard.addEventListener('touchend', () => clearTimeout(pressTimer));
+                txCard.addEventListener('touchmove', () => clearTimeout(pressTimer));
+
+                list.appendChild(txEl);
+            });
+            setTimeout(()=>list.scrollTop=list.scrollHeight,50);
+        };
+
+        const openCustomer=(id)=>{ state.currentCustomerId=id; renderCustomerScreen(); const h=document.getElementById('home-screen'),c=document.getElementById('customer-screen'); c.classList.remove('hidden'); setTimeout(()=>{h.classList.add('-translate-x-full');c.classList.remove('translate-x-full');},10); };
+        const goBackToHome=()=>{ const h=document.getElementById('home-screen'),c=document.getElementById('customer-screen'); h.classList.remove('-translate-x-full');c.classList.add('translate-x-full'); renderHomeList(); setTimeout(()=>{c.classList.add('hidden');state.currentCustomerId=null;},300); };
+        const filterCustomers=()=>renderHomeList(document.getElementById('search-input').value);
+        const openModal=(id)=>{ const m=document.getElementById(id),c=m.querySelector('div[id$="-content"]'); m.classList.remove('hidden'); if(id==='add-transaction-modal' && !document.getElementById('tx-id').value){document.getElementById('tx-date').valueAsDate=new Date();setTimeout(()=>document.getElementById('tx-amount').focus(),100);}else if(id==='add-customer-modal'){setTimeout(()=>document.getElementById('new-cust-name').focus(),100);} setTimeout(()=>{m.classList.remove('opacity-0');if(c)c.classList.remove('translate-y-full');},10); };
+        const closeModal=(id)=>{ const m=document.getElementById(id),c=m.querySelector('div[id$="-content"]'); m.classList.add('opacity-0');if(c)c.classList.add('translate-y-full'); setTimeout(()=>{m.classList.add('hidden');m.querySelectorAll('input').forEach(i=>{if(i.type!=='hidden'&&i.type!=='file')i.value='';}); document.getElementById('tx-id').value=''; document.getElementById('delete-tx-btn').classList.add('hidden'); },300); };
+
+        const saveCustomer=()=>{ const n=document.getElementById('new-cust-name').value.trim(),p=document.getElementById('new-cust-phone').value.trim(),a=document.getElementById('new-cust-address').value.trim(); if(!n)return showToast("Enter Name",true); state.customers.push({id:Date.now().toString(),name:n,phone:p,address:a,transactions:[]}); saveDataLocally();closeModal('add-customer-modal');renderHomeList();showToast(t('saveBtn')); };
+        
+        // Transaction ADD
+        const openTransactionModal=(t_type)=>{ 
+            document.getElementById('tx-id').value = ''; // Reset edit id
+            document.getElementById('delete-tx-btn').classList.add('hidden');
+            const title=document.getElementById('tx-modal-title'),btn=document.getElementById('save-tx-btn'),ti=document.getElementById('tx-type'); 
+            title.innerText=t_type==='diya'?t('txTitleGave'):t('txTitleGot'); title.className=`text-xl font-bold ${t_type==='diya'?'text-diya':'text-mila'}`; 
+            btn.innerHTML=`<span data-i18n="saveBtn">${t('saveBtn')}</span>`; btn.className=`w-full py-3.5 rounded-xl font-bold mt-4 transition shadow-lg text-white ${t_type==='diya'?'bg-diya hover:bg-diya/90 shadow-diya/30':'bg-mila hover:bg-mila/90 shadow-mila/30'}`; 
+            ti.value=t_type; openModal('add-transaction-modal'); 
+        };
+
+        // Transaction EDIT
+        const editTransaction = (txId) => {
+            const cust = state.customers.find(c => c.id === state.currentCustomerId);
+            const tx = cust.transactions.find(t => t.id === txId);
+            if(!tx) return;
+
+            document.getElementById('tx-id').value = tx.id;
+            document.getElementById('tx-type').value = tx.type;
+            document.getElementById('tx-amount').value = tx.amount;
+            document.getElementById('tx-note').value = tx.note || '';
             
-            document.getElementById('edit_name').value = '';
-            document.getElementById('edit_policyNo').value = '';
-            document.getElementById('edit_policyNo').readOnly = false;
-            document.getElementById('edit_policyNo').classList.remove('cursor-not-allowed', 'bg-gray-100');
-            document.getElementById('edit_policyNo').classList.add('bg-white');
+            // Format date for input[type=date] -> YYYY-MM-DD
+            const d = new Date(tx.date);
+            document.getElementById('tx-date').value = d.toISOString().split('T')[0];
             
-            document.getElementById('edit_dob').value = '';
-            document.getElementById('edit_mobile').value = '';
-            document.getElementById('edit_email').value = '';
-            document.getElementById('edit_address').value = '';
-            document.getElementById('edit_nominee').value = '';
-            document.getElementById('edit_plan').value = '';
-            document.getElementById('edit_doc').value = '';
-            document.getElementById('edit_term').value = '';
-            document.getElementById('edit_ppt').value = '';
-            document.getElementById('edit_mode').value = '';
-            document.getElementById('edit_sumAssured').value = '';
-            document.getElementById('edit_premium').value = '';
-            document.getElementById('edit_fup').value = '';
+            // UI setup
+            document.getElementById('delete-tx-btn').classList.remove('hidden');
+            const title = document.getElementById('tx-modal-title');
+            const btn = document.getElementById('save-tx-btn');
+            
+            title.innerText = t('editTxTitle');
+            title.className = `text-xl font-bold ${tx.type==='diya'?'text-diya':'text-mila'}`;
+            btn.innerText = t('updateBtn');
+            btn.className = `w-full py-3.5 rounded-xl font-bold mt-4 transition shadow-lg text-white ${tx.type==='diya'?'bg-diya hover:bg-diya/90 shadow-diya/30':'bg-mila hover:bg-mila/90 shadow-mila/30'}`;
 
-            document.getElementById('totalPremiumContainer').classList.add('hidden');
-            document.getElementById('saveMsg').classList.add('hidden');
+            openModal('add-transaction-modal');
+        };
 
-            const modal = document.getElementById('policyModal');
-            modal.classList.remove('hidden');
-            setTimeout(() => {
-                modal.classList.remove('opacity-0', 'pointer-events-none');
-                modal.classList.add('opacity-100');
-            }, 10);
-        }
+        // Save / Update
+        const saveTransaction=()=>{ 
+            const a=Number(document.getElementById('tx-amount').value),n=document.getElementById('tx-note').value.trim(),dVal=document.getElementById('tx-date').value; 
+            if(!a||a<=0)return showToast("Invalid amount",true); 
+            
+            const cust=state.customers.find(c=>c.id===state.currentCustomerId); 
+            const editId = document.getElementById('tx-id').value;
+            const tType = document.getElementById('tx-type').value;
 
-        function openModal(policyNo) {
-            const policy = allPolicies.find(p => p['Policy Number'] === policyNo);
-            if (!policy) return;
-
-            isAddingNew = false;
-            currentEditingPolicy = policy;
-            document.getElementById('modalTitle').innerHTML = '<i class="fa-solid fa-file-lines text-licYellow"></i> Policy Details';
-
-            document.getElementById('edit_name').value = policy['Policy Holder'] || '';
-            document.getElementById('edit_policyNo').value = policy['Policy Number'] || '';
-            document.getElementById('edit_policyNo').readOnly = true;
-            document.getElementById('edit_policyNo').classList.add('cursor-not-allowed', 'bg-gray-100');
-            document.getElementById('edit_policyNo').classList.remove('bg-white');
-
-            // Format dates from DD/MM/YYYY to YYYY-MM-DD for input
-            document.getElementById('edit_dob').value = formatToDateInput(policy['DOB']);
-            document.getElementById('edit_doc').value = formatToDateInput(policy['Commecement Date'] || policy['Commencement Date']);
-            document.getElementById('edit_fup').value = formatToDateInput(policy['FUP Date']);
-
-            document.getElementById('edit_mobile').value = policy['Mobile'] || '';
-            document.getElementById('edit_email').value = policy['Email'] || '';
-            document.getElementById('edit_address').value = policy['Address'] || '';
-            document.getElementById('edit_nominee').value = policy['Nominee'] || '';
-            document.getElementById('edit_plan').value = policy['Plan'] || '';
-            document.getElementById('edit_term').value = policy['Term'] || '';
-            document.getElementById('edit_ppt').value = policy['PPT'] || '';
-            document.getElementById('edit_mode').value = policy['Mode'] || '';
-            document.getElementById('edit_sumAssured').value = policy['Sum Assured'] || '';
-            document.getElementById('edit_premium').value = policy['Premium'] || '';
-
-            document.getElementById('totalPremiumContainer').classList.add('hidden');
-            document.getElementById('saveMsg').classList.add('hidden');
-
-            const modal = document.getElementById('policyModal');
-            modal.classList.remove('hidden');
-            setTimeout(() => {
-                modal.classList.remove('opacity-0', 'pointer-events-none');
-                modal.classList.add('opacity-100');
-            }, 10);
-        }
-
-        function closeModal() {
-            const modal = document.getElementById('policyModal');
-            modal.classList.remove('opacity-100');
-            modal.classList.add('opacity-0', 'pointer-events-none');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                currentEditingPolicy = null;
-                isAddingNew = false;
-            }, 300);
-        }
-
-        function saveDetails() {
-            let p;
-            if(isAddingNew) {
-                let pNo = document.getElementById('edit_policyNo').value.trim();
-                if(!pNo) {
-                    alert("Policy Number is required!");
-                    return;
+            if(editId) {
+                // UPDATE Existing
+                const txIndex = cust.transactions.findIndex(t => t.id === editId);
+                if(txIndex > -1) {
+                    let txDate = new Date(cust.transactions[txIndex].date); // keep old time
+                    if(dVal){ const s=new Date(dVal); txDate.setFullYear(s.getFullYear(), s.getMonth(), s.getDate()); }
+                    cust.transactions[txIndex] = { ...cust.transactions[txIndex], amount: a, note: n, date: txDate.toISOString() };
+                    showToast(state.lang==='en'?"Updated!":"Update ho gaya!");
                 }
-                p = {};
-                p['SNo'] = allPolicies.length + 1;
-                allPolicies.push(p);
             } else {
-                if(!currentEditingPolicy) return;
-                p = currentEditingPolicy;
-            }
-            
-            p['Policy Holder'] = document.getElementById('edit_name').value.trim();
-            p['Policy Number'] = document.getElementById('edit_policyNo').value.trim();
-            
-            // Format dates back from YYYY-MM-DD to DD/MM/YYYY for storing
-            p['DOB'] = formatToDDMMYYYY(document.getElementById('edit_dob').value);
-            p['FUP Date'] = formatToDDMMYYYY(document.getElementById('edit_fup').value);
-            
-            let docVal = formatToDDMMYYYY(document.getElementById('edit_doc').value);
-            if('Commecement Date' in p || isAddingNew) {
-                p['Commecement Date'] = docVal;
-            } else {
-                p['Commencement Date'] = docVal;
+                // ADD New
+                let txD=new Date(); if(dVal){const s=new Date(dVal);txD.setFullYear(s.getFullYear(),s.getMonth(),s.getDate());} 
+                cust.transactions.push({id:'tx_'+Date.now(), type:tType, amount:a, note:n, date:txD.toISOString()}); 
+                showToast(t('saveBtn'));
             }
 
-            p['Mobile'] = document.getElementById('edit_mobile').value.trim();
-            p['Email'] = document.getElementById('edit_email').value.trim();
-            p['Address'] = document.getElementById('edit_address').value.trim();
-            p['Nominee'] = document.getElementById('edit_nominee').value.trim();
-            p['Plan'] = document.getElementById('edit_plan').value.trim();
-            
-            p['Term'] = document.getElementById('edit_term').value.trim();
-            p['PPT'] = document.getElementById('edit_ppt').value.trim();
-            p['Mode'] = document.getElementById('edit_mode').value.trim();
-            p['Sum Assured'] = document.getElementById('edit_sumAssured').value.trim();
-            p['Premium'] = document.getElementById('edit_premium').value.trim();
-            
-            saveToLocalStorage(); 
-            
-            const saveMsg = document.getElementById('saveMsg');
-            saveMsg.classList.remove('hidden');
-            
-            applyFilters();
-            
-            setTimeout(() => {
-                saveMsg.classList.add('hidden');
-                if (isAddingNew) closeModal();
-            }, 1500);
-        }
+            saveDataLocally(); closeModal('add-transaction-modal'); renderCustomerScreen(); updateDashboardTotals(); 
+        };
 
-        function calculateTotalPremium() {
-            // Get dates in YYYY-MM-DD format from inputs
-            let docStr = document.getElementById('edit_doc').value;
-            let fupStr = document.getElementById('edit_fup').value;
-            let premiumStr = document.getElementById('edit_premium').value.trim();
-            let mode = String(document.getElementById('edit_mode').value).toUpperCase().trim();
+        // Delete Transaction
+        const deleteTransaction = () => {
+            const editId = document.getElementById('tx-id').value;
+            if(!editId) return;
+            if(confirm(state.lang==='en'?"Delete this entry?":"Kya aap is len-den ko delete karna chahte hain?")) {
+                const cust = state.customers.find(c => c.id === state.currentCustomerId);
+                cust.transactions = cust.transactions.filter(t => t.id !== editId);
+                saveDataLocally();
+                closeModal('add-transaction-modal'); 
+                renderCustomerScreen(); 
+                updateDashboardTotals();
+                showToast("Deleted");
+            }
+        };
 
-            if(!docStr || !fupStr || !premiumStr || !mode) {
-                alert("Ensure DOC, FUP Date, Premium, and Mode are filled.");
-                return;
+        const deleteCustomerConfirm=()=>{ if(confirm(state.lang==='en'?"Delete customer?":"Kya aap is grahak ko delete karna chahte hain?")){ state.customers=state.customers.filter(c=>c.id!==state.currentCustomerId); saveDataLocally();goBackToHome();showToast("Deleted"); } };
+
+        const backupData=()=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(state)],{type:"application/json"})); a.download=`Khata_Backup_${new Date().toISOString().split('T')[0]}.json`; a.click();URL.revokeObjectURL(a.href);closeModal('settings-modal');showToast("Backup Downloaded!"); };
+        const restoreData=(e)=>{ const f=e.target.files[0];if(!f)return; const r=new FileReader(); r.onload=(ev)=>{try{const p=JSON.parse(ev.target.result);if(p.customers){state=p;saveDataLocally();applyTranslations();closeModal('settings-modal');showToast("Restored!");}else throw new Error();}catch(err){showToast("Invalid File",true);} e.target.value='';}; r.readAsText(f); };
+        const clearAllData=()=>{ if(confirm(state.lang==='en'?"Delete EVERYTHING?":"Kya aap saara data delete karna chahte hain?")){ state.customers=[];state.profile={name:'',avatar:'',address:''}; saveDataLocally();renderHomeList();updateProfileUI();closeModal('settings-modal');showToast("Cleared"); } };
+
+        // --- SHARE & PDF LOGIC ---
+        const shareTextStatement = (type) => {
+            const cust = state.customers.find(c => c.id === state.currentCustomerId);
+            const bal = getCustomerBalance(cust);
+            const bizName = state.profile.name || "Digital Khata";
+            let text = `🧾 *${bizName}*\n\nNamaste ${cust.name},\n`;
+            let balText = bal === 0 ? "Hisab Barabar hai." : (bal > 0 ? `Aapka baki (Due): ₹${bal}` : `Aapka Advance: ₹${Math.abs(bal)}`);
+            text += `*Kul Hisab:* ${balText}\n\n`;
+            text += `Thank You!\n_(Sent via Digital Khata)_`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
+            closeModal('share-modal');
+        };
+
+        const generatePDF = (type) => {
+            const cust = state.customers.find(c => c.id === state.currentCustomerId);
+            if(!cust) return;
+            
+            const loaderId = type === 'mini' ? 'pdf-loading-mini' : 'pdf-loading-full';
+            document.getElementById(loaderId).classList.remove('hidden');
+
+            const bal = getCustomerBalance(cust);
+            const bizName = state.profile.name || t('appTitle');
+            const bizAddress = state.profile.address || '';
+            const logoHtml = state.profile.avatar ? `<img src="${state.profile.avatar}" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;">` : '';
+            
+            const currDate = new Date();
+            const dateStr = currDate.toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+            const timeStr = currDate.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+
+            let txHtml = '';
+            if (type === 'full') {
+                txHtml = `
+                <table style="width: 100%; border-collapse: collapse; margin-top: 30px;">
+                    <thead>
+                        <tr style="background-color: #f3f4f6; border-bottom: 2px solid #e5e7eb; text-align: left;">
+                            <th style="padding: 12px 8px; font-size: 14px; color: #4b5563;">${t('pdfSn')}</th>
+                            <th style="padding: 12px 8px; font-size: 14px; color: #4b5563;">${t('pdfDateCol')}</th>
+                            <th style="padding: 12px 8px; font-size: 14px; color: #4b5563;">${t('pdfDesc')}</th>
+                            <th style="padding: 12px 8px; font-size: 14px; color: #4b5563; text-align: right;">${t('pdfMila')}</th>
+                            <th style="padding: 12px 8px; font-size: 14px; color: #4b5563; text-align: right;">${t('pdfDiya')}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                `;
+                const sortedTx = [...cust.transactions].sort((a, b) => new Date(a.date) - new Date(b.date));
+                sortedTx.forEach((tx, idx) => {
+                    const tDate = formatDate(tx.date, true);
+                    const isDiya = tx.type === 'diya';
+                    txHtml += `
+                        <tr style="border-bottom: 1px solid #e5e7eb;">
+                            <td style="padding: 12px 8px; font-size: 14px;">${idx + 1}</td>
+                            <td style="padding: 12px 8px; font-size: 14px;">${tDate}</td>
+                            <td style="padding: 12px 8px; font-size: 14px;">${tx.note || '-'}</td>
+                            <td style="padding: 12px 8px; font-size: 14px; text-align: right; color: #16a34a;">${!isDiya ? formatMoney(tx.amount) : '-'}</td>
+                            <td style="padding: 12px 8px; font-size: 14px; text-align: right; color: #dc2626;">${isDiya ? formatMoney(tx.amount) : '-'}</td>
+                        </tr>
+                    `;
+                });
+                txHtml += `</tbody></table>`;
             }
 
-            let docParts = docStr.split('-');
-            let fupParts = fupStr.split('-');
-            
-            if(docParts.length !== 3 || fupParts.length !== 3) {
-                alert("Please select valid dates.");
-                return;
-            }
+            // PDF Content construction
+            const pdfContent = `
+                <div style="font-family: Arial, sans-serif; padding: 40px; color: #1f2937; background: white; width: 100%; box-sizing: border-box;">
+                    
+                    <!-- Header -->
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #0a4275; padding-bottom: 20px; margin-bottom: 30px;">
+                        <div style="display: flex; gap: 20px; align-items: center;">
+                            ${logoHtml}
+                            <div>
+                                <h1 style="margin: 0; font-size: 28px; color: #0a4275; text-transform: uppercase;">${bizName}</h1>
+                                ${bizAddress ? `<p style="margin: 5px 0 0 0; color: #6b7280; font-size: 14px;">${bizAddress}</p>` : ''}
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <h2 style="margin: 0; font-size: 20px; color: #374151; letter-spacing: 1px;">${t('pdfTitle')}</h2>
+                            <p style="margin: 5px 0 0 0; color: #6b7280; font-size: 12px;">${t('pdfDate')} <strong>${dateStr}</strong></p>
+                            <p style="margin: 2px 0 0 0; color: #6b7280; font-size: 12px;">${t('pdfTime')} <strong>${timeStr}</strong></p>
+                        </div>
+                    </div>
 
-            let doc = new Date(docParts[0], parseInt(docParts[1]) - 1, docParts[2]);
-            let fup = new Date(fupParts[0], parseInt(fupParts[1]) - 1, fupParts[2]);
-            let premium = parseFloat(premiumStr);
+                    <!-- Customer Details & Net Balance -->
+                    <div style="display: flex; justify-content: space-between; background-color: #f9fafb; padding: 20px; border-radius: 8px; border: 1px solid #e5e7eb;">
+                        <div>
+                            <p style="margin: 0 0 5px 0; color: #6b7280; font-size: 12px; text-transform: uppercase;">${t('pdfCustName')}</p>
+                            <h3 style="margin: 0 0 10px 0; font-size: 18px;">${cust.name}</h3>
+                            ${cust.phone ? `<p style="margin: 0 0 4px 0; font-size: 14px;"><strong>${t('pdfCustPhone')}</strong> ${cust.phone}</p>` : ''}
+                            ${cust.address ? `<p style="margin: 0; font-size: 14px;"><strong>${t('pdfCustAddr')}</strong> ${cust.address}</p>` : ''}
+                        </div>
+                        
+                        <div style="text-align: right; border-left: 2px dashed #d1d5db; padding-left: 20px;">
+                            <p style="margin: 0 0 5px 0; color: #6b7280; font-size: 12px; text-transform: uppercase;">${bal > 0 ? t('pdfTotalDue') : (bal < 0 ? t('pdfTotalAdv') : t('netBalance'))}</p>
+                            <h2 style="margin: 0; font-size: 32px; color: ${bal > 0 ? '#dc2626' : (bal < 0 ? '#16a34a' : '#374151')};">
+                                ${formatMoney(Math.abs(bal))}
+                            </h2>
+                            <p style="margin: 5px 0 0 0; font-size: 14px; font-weight: bold; color: ${bal > 0 ? '#dc2626' : (bal < 0 ? '#16a34a' : '#374151')};">
+                                ${bal === 0 ? t('settled') : (bal > 0 ? t('udhaarText') : t('advanceText'))}
+                            </p>
+                        </div>
+                    </div>
 
-            let monthsDiff = (fup.getFullYear() - doc.getFullYear()) * 12 + (fup.getMonth() - doc.getMonth());
-            let installments = 0;
+                    ${txHtml}
 
-            if(mode === 'M' || mode === 'SSS' || mode === 'MONTHLY') installments = monthsDiff;
-            else if(mode === 'Q' || mode === 'QUARTERLY') installments = monthsDiff / 3;
-            else if(mode === 'H' || mode === 'HALF YEARLY') installments = monthsDiff / 6;
-            else if(mode === 'Y' || mode === 'YEARLY') installments = monthsDiff / 12;
-            else if(mode === 'S' || mode === 'SINGLE') installments = 1;
+                    <!-- Footer -->
+                    <div style="margin-top: 50px; text-align: center; color: #9ca3af; font-size: 12px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+                        <p>${t('pdfFooter')} Generated via Digital Khata.</p>
+                    </div>
+                </div>
+            `;
 
-            let totalPaid = Math.max(0, Math.round(installments)) * premium;
+            // FIX: Render container properly for html2pdf
+            const container = document.getElementById('pdf-template-container');
+            container.innerHTML = pdfContent;
             
-            document.getElementById('totalPremiumDisplay').innerText = '₹ ' + totalPaid.toLocaleString('en-IN');
-            document.getElementById('totalPremiumContainer').classList.remove('hidden');
-        }
-
-        function shareViaWhatsApp() {
-            let name = document.getElementById('edit_name').value.trim();
-            let pNo = document.getElementById('edit_policyNo').value.trim();
-            let premium = document.getElementById('edit_premium').value.trim();
-            let fup = formatToDDMMYYYY(document.getElementById('edit_fup').value);
+            // Required to make sure images load before capturing
+            container.style.visibility = 'visible';
             
-            if (!pNo) return;
-            
-            let text = `*LIC Policy Details* 📝\n\n`;
-            text += `*Name:* ${name}\n`;
-            text += `*Policy No:* ${pNo}\n`;
-            text += `*Premium:* ₹${premium || 'N/A'}\n`;
-            text += `*Next FUP:* ${fup || 'N/A'}\n\n`;
-            
-            text += `LIC agent and Financial planner\n`;
-            text += `Madan Prajapat\n`;
-            text += `Mob. No. 9929326600`;
-            
-            const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-            window.open(whatsappUrl, '_blank');
-        }
-
-        // Initialize Custom Calendar (Flatpickr)
-        document.addEventListener('DOMContentLoaded', function() {
-            const dateConfig = { 
-                dateFormat: "Y-m-d", 
-                allowInput: true 
+            const opt = {
+                margin:       [0.5, 0.5], // added margins
+                filename:     `Khata_${cust.name}_${dateStr}.pdf`,
+                image:        { type: 'jpeg', quality: 1 },
+                html2canvas:  { scale: 2, useCORS: true, logging: false },
+                jsPDF:        { unit: 'in', format: 'a4', orientation: 'portrait' }
             };
-            flatpickr("#customFromDate", dateConfig);
-            flatpickr("#customToDate", dateConfig);
-            flatpickr("#edit_dob", dateConfig);
-            flatpickr("#edit_doc", dateConfig);
-            flatpickr("#edit_fup", dateConfig);
-        });
+
+            setTimeout(() => {
+                html2pdf().set(opt).from(container).save().then(() => {
+                    document.getElementById(loaderId).classList.add('hidden');
+                    container.style.visibility = 'hidden'; // Hide again
+                    closeModal('share-modal');
+                    showToast("PDF Downloaded!");
+                }).catch(err => {
+                    document.getElementById(loaderId).classList.add('hidden');
+                    container.style.visibility = 'hidden';
+                    showToast("Failed to generate PDF", true);
+                });
+            }, 500); 
+        };
+
+        window.onload = () => { loadDataLocally(); applyTranslations(); };
     </script>
 </body>
 </html>
